@@ -430,7 +430,7 @@ export async function getProjectMemberRole(projectId: number, userId: number): P
     SELECT role FROM project_members 
     WHERE project_id = ${projectId} AND user_id = ${userId}
   `
-  return rows[0]?.role || null
+  return (rows[0]?.role as string) || null
 }
 
 // ============================================
