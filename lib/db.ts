@@ -48,11 +48,11 @@ export async function getProjects(userId?: number) {
   return rows
 }
 
-export async function getProject(id: number) {
+export async function getProject(id: number): Promise<Project | null> {
   const { rows } = await sql`
     SELECT * FROM projects WHERE id = ${id}
   `
-  return rows[0] || null
+  return (rows[0] as Project) || null
 }
 
 export async function createProject(data: { name: string; description?: string; owner_id?: number }) {

@@ -7,7 +7,7 @@ import { getProject, getKanbanView } from '@/lib/db'
 export default async function ProjectPage({
   params,
 }: {
-  params: { projectId: string }
+  params: Promise<{ projectId: string }>
 }) {
   const session = await getServerSession(authOptions)
 
@@ -15,7 +15,8 @@ export default async function ProjectPage({
     redirect('/login')
   }
 
-  const projectId = parseInt(params.projectId)
+  const { projectId: projectIdStr } = await params
+  const projectId = parseInt(projectIdStr)
   const [project, kanban] = await Promise.all([
     getProject(projectId),
     getKanbanView(projectId),
