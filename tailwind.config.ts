@@ -10,6 +10,32 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Theme Colors (for @apply compatibility)
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        card: 'var(--card)',
+        'card-foreground': 'var(--card-foreground)',
+        primary: 'var(--primary)',
+        'primary-foreground': 'var(--primary-foreground)',
+        secondary: {
+          DEFAULT: '#1c1c24',
+          foreground: '#fafafa',
+        },
+        muted: {
+          DEFAULT: '#1c1c24',
+          foreground: '#a1a1aa',
+        },
+        accent: {
+          DEFAULT: '#1c1c24',
+          foreground: '#fafafa',
+        },
+        destructive: {
+          DEFAULT: '#dc2626',
+          foreground: '#fafafa',
+        },
+        border: 'var(--border)',
+        input: 'var(--input)',
+        ring: 'var(--ring)',
         // Blackcode Brand Colors
         brand: {
           50: '#f0f9ff',
