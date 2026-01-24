@@ -82,7 +82,7 @@ export async function getProject(id: number): Promise<Project | null> {
   const { rows } = await sql`
     SELECT * FROM projects WHERE id = ${id}
   `
-  return (rows[0] as Project) || null
+  return (rows[0] as unknown as Project) || null
 }
 
 export async function createProject(data: { name: string; description?: string; owner_id?: number }) {
@@ -524,7 +524,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   const { rows } = await sql`
     SELECT * FROM users WHERE email = ${email}
   `
-  return (rows[0] as User) || null
+  return (rows[0] as unknown as User) || null
 }
 
 // ============================================
