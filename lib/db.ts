@@ -8,16 +8,26 @@ neonConfig.fetchConnectionCache = true
 const neonSql = neon(process.env.DATABASE_URL!)
 
 // Wrapper to return { rows } like @vercel/postgres
-const sql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
+interface SqlFunction {
+  (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }>
+  query: (query: string, params: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
+}
+
+const baseSql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
   const rows = await neonSql(strings, ...values)
   return { rows: rows as Record<string, unknown>[] }
 }
 
-// For raw queries with parameters
-sql.query = async (query: string, params: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
-  const rows = await neonSql(query, params)
+// For raw queries with parameters - cast to any to bypass TS
+const rawQuery = async (query: string, params: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = await (neonSql as any)(query, params)
   return { rows: rows as Record<string, unknown>[] }
 }
+
+// Combine into sql object
+const sql = baseSql as SqlFunction
+sql.query = rawQuery
 
 // ============================================
 // PROJECTS
