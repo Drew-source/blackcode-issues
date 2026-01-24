@@ -490,11 +490,11 @@ export async function getUsers() {
   return rows
 }
 
-export async function getUserByEmail(email: string) {
+export async function getUserByEmail(email: string): Promise<User | null> {
   const { rows } = await sql`
     SELECT * FROM users WHERE email = ${email}
   `
-  return rows[0] || null
+  return (rows[0] as User) || null
 }
 
 // ============================================
