@@ -170,7 +170,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
       description: editedDescription,
       status: editedStatus,
       priority: editedPriority,
-      assignee_id: editedAssigneeId,
+      assignee_id: editedAssigneeId ?? undefined,
     })
   }
 
