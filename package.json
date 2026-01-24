@@ -11,34 +11,35 @@
     "db:migrate": "node scripts/migrate.js"
   },
   "dependencies": {
+    "@auth/pg-adapter": "^1.4.1",
+    "@hello-pangea/dnd": "^16.6.0",
+    "@tanstack/react-query": "^5.56.2",
+    "@vercel/postgres": "^0.9.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^11.5.4",
+    "geist": "^1.5.1",
+    "lucide-react": "^0.447.0",
     "next": "14.2.0",
+    "next-auth": "^4.24.7",
+    "next-themes": "^0.4.6",
+    "pg": "^8.12.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "next-auth": "^4.24.7",
-    "@auth/pg-adapter": "^1.4.1",
-    "pg": "^8.12.0",
-    "@vercel/postgres": "^0.9.0",
-    "@hello-pangea/dnd": "^16.6.0",
-    "lucide-react": "^0.447.0",
-    "clsx": "^2.1.1",
+    "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
-    "class-variance-authority": "^0.7.0",
-    "date-fns": "^3.6.0",
-    "zustand": "^4.5.5",
-    "@tanstack/react-query": "^5.56.2",
-    "framer-motion": "^11.5.4",
-    "sonner": "^1.5.0"
+    "zustand": "^4.5.5"
   },
   "devDependencies": {
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
-    "typescript": "^5.6.2",
-    "tailwindcss": "^3.4.12",
-    "postcss": "^8.4.47",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.0",
-    "eslint-config-next": "14.2.0"
+    "eslint-config-next": "14.2.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.12",
+    "typescript": "^5.6.2"
   }
 }
-
