@@ -44,9 +44,9 @@ const sqlTagged = async (strings: TemplateStringsArray, ...values: unknown[]): P
 
 // For parameterized queries with dynamic SQL strings
 const sqlQuery = async (query: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> => {
-  // Use neon's raw query support
-  const rows = await neonSql(query, params)
-  return { rows: rows as Record<string, unknown>[] }
+  // Use neon's raw query support - cast to bypass TS template literal requirement
+  const rows = await (neonSql as unknown as (q: string, p: unknown[]) => Promise<Record<string, unknown>[]>)(query, params)
+  return { rows }
 }
 
 // Combined interface
