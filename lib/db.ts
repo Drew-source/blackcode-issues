@@ -189,7 +189,7 @@ export async function getIssues(projectId?: number, options?: {
   }
 
   const { rows } = await sql.query(query, params)
-  return rows
+  return rows as Issue[]
 }
 
 export async function getIssue(id: number) {
