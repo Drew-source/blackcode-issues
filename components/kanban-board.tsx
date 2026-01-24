@@ -10,21 +10,15 @@ import Image from 'next/image'
 import {
   ArrowLeft,
   Plus,
-  MoreHorizontal,
   MessageSquare,
   Paperclip,
-  Clock,
-  AlertCircle,
-  ChevronDown,
   Search,
   Filter,
-  Calendar,
-  User2,
-  Tag,
   Undo2,
   X,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import type { Issue as IssueType, Project as ProjectType, KanbanData } from '@/types'
 
 // Status configuration
 const STATUSES = [
@@ -44,33 +38,9 @@ const PRIORITY_CONFIG = {
   5: { label: 'None', color: 'text-gray-400', bg: 'bg-gray-400/10' },
 } as const
 
-interface Issue {
-  id: number
-  title: string
-  description?: string
-  status: string
-  priority: number
-  assignee_id?: number
-  assignee_name?: string
-  assignee_avatar?: string
-  milestone_id?: number
-  milestone_name?: string
-  labels?: string[]
-  comment_count: number
-  attachment_count: number
-  created_at: string
-  updated_at: string
-}
-
-interface Project {
-  id: number
-  name: string
-  description?: string
-}
-
-interface KanbanData {
-  [status: string]: Issue[]
-}
+// Re-export types for local use
+type Issue = IssueType
+type Project = ProjectType
 
 interface User {
   name?: string | null

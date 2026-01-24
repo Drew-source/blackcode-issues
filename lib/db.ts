@@ -1,4 +1,5 @@
 import { neon, neonConfig } from '@neondatabase/serverless'
+import type { Project, Issue, KanbanData, Milestone, Comment, ProjectMember, TransactionLog } from '@/types'
 
 // Configure Neon for serverless
 neonConfig.fetchConnectionCache = true
@@ -7,22 +8,22 @@ neonConfig.fetchConnectionCache = true
 const neonSql = neon(process.env.DATABASE_URL!)
 
 // Wrapper to return { rows } like @vercel/postgres
-const sql = async (strings: TemplateStringsArray, ...values: any[]) => {
+const sql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
   const rows = await neonSql(strings, ...values)
-  return { rows }
+  return { rows: rows as Record<string, unknown>[] }
 }
 
 // For raw queries with parameters
-sql.query = async (query: string, params: any[]) => {
+sql.query = async (query: string, params: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
   const rows = await neonSql(query, params)
-  return { rows }
+  return { rows: rows as Record<string, unknown>[] }
 }
 
 // ============================================
 // PROJECTS
 // ============================================
 
-export async function getProjects(userId?: number) {
+export async function getProjects(userId?: number): Promise<Project[]> {
   // If userId provided, only return projects they're a member of
   // If not, return all projects (for admin/backwards compatibility)
   if (userId) {
@@ -38,7 +39,7 @@ export async function getProjects(userId?: number) {
       GROUP BY p.id, pm.role
       ORDER BY p.updated_at DESC
     `
-    return rows
+    return rows as unknown as Project[]
   }
   
   const { rows } = await sql`
@@ -51,14 +52,14 @@ export async function getProjects(userId?: number) {
     GROUP BY p.id
     ORDER BY p.updated_at DESC
   `
-  return rows
+  return rows as unknown as Project[]
 }
 
-export async function getProject(id: number) {
+export async function getProject(id: number): Promise<Project | null> {
   const { rows } = await sql`
     SELECT * FROM projects WHERE id = ${id}
   `
-  return rows[0] || null
+  return (rows[0] as unknown as Project) || null
 }
 
 export async function createProject(data: { name: string; description?: string; owner_id?: number }) {
@@ -122,7 +123,7 @@ export async function getIssues(projectId?: number, options?: {
   milestone_id?: number
   limit?: number
   offset?: number
-}) {
+}): Promise<Issue[]> {
   let query = `
     SELECT 
       i.*,
@@ -172,10 +173,10 @@ export async function getIssues(projectId?: number, options?: {
   }
 
   const { rows } = await sql.query(query, params)
-  return rows
+  return rows as unknown as Issue[]
 }
 
-export async function getIssue(id: number) {
+export async function getIssue(id: number): Promise<Issue | null> {
   const { rows } = await sql`
     SELECT 
       i.*,
@@ -189,7 +190,7 @@ export async function getIssue(id: number) {
     LEFT JOIN milestones m ON m.id = i.milestone_id
     WHERE i.id = ${id}
   `
-  return rows[0] || null
+  return (rows[0] as unknown as Issue) || null
 }
 
 export async function createIssue(data: {
@@ -283,10 +284,10 @@ export async function deleteIssue(id: number) {
 // KANBAN VIEW
 // ============================================
 
-export async function getKanbanView(projectId: number) {
+export async function getKanbanView(projectId: number): Promise<KanbanData> {
   const issues = await getIssues(projectId)
   
-  const kanban: Record<string, typeof issues> = {
+  const kanban: KanbanData = {
     backlog: [],
     todo: [],
     in_progress: [],
