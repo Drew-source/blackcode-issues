@@ -1,6 +1,14 @@
 import NextAuth, { type NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
-import { sql } from '@vercel/postgres'
+import { neon } from '@neondatabase/serverless'
+
+const neonSql = neon(process.env.DATABASE_URL!)
+
+// Wrapper to return { rows } like @vercel/postgres
+const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+  const rows = await neonSql(strings, ...values)
+  return { rows }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [

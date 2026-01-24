@@ -117,7 +117,10 @@ body {
 }
 
 .kanban-card {
-  @apply bg-card rounded-lg p-4 shadow-sm border border-border hover:border-primary/50 transition-all cursor-pointer;
+  @apply bg-card rounded-lg p-4 shadow-sm border border-border transition-all cursor-pointer;
+}
+.kanban-card:hover {
+  border-color: hsl(var(--primary) / 0.5);
 }
 
 .kanban-card:hover {

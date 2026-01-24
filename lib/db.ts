@@ -1,4 +1,16 @@
-import { sql } from '@vercel/postgres'
+import { neon, neonConfig } from '@neondatabase/serverless'
+
+// Configure Neon for serverless
+neonConfig.fetchConnectionCache = true
+
+// Initialize Neon client
+const neonSql = neon(process.env.DATABASE_URL!)
+
+// Wrapper to return { rows } like @vercel/postgres
+const sql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
+  const rows = await neonSql(strings, ...values)
+  return { rows: rows as Record<string, unknown>[] }
+}
 
 // ============================================
 // PROJECTS
