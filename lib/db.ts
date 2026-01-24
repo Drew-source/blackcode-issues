@@ -37,10 +37,20 @@ export interface Issue {
 const neonSql = neon(process.env.DATABASE_URL!)
 
 // Wrapper to return { rows } like @vercel/postgres
-const sql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
+const sqlTagged = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
   const rows = await neonSql(strings, ...values)
   return { rows: rows as Record<string, unknown>[] }
 }
+
+// For parameterized queries with dynamic SQL strings
+const sqlQuery = async (query: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> => {
+  // Use neon's raw query support
+  const rows = await neonSql(query, params)
+  return { rows: rows as Record<string, unknown>[] }
+}
+
+// Combined interface
+const sql = Object.assign(sqlTagged, { query: sqlQuery })
 
 // ============================================
 // PROJECTS
@@ -101,38 +111,18 @@ export async function createProject(data: { name: string; description?: string; 
   return project || null
 }
 
-export async function updateProject(id: number, data: Partial<{ name: string; description: string; status: string }>) {
-  const updates = []
-  const values = []
-  let idx = 1
-
-  if (data.name !== undefined) {
-    updates.push(`name = $${idx++}`)
-    values.push(data.name)
-  }
-  if (data.description !== undefined) {
-    updates.push(`description = $${idx++}`)
-    values.push(data.description)
-  }
-  if (data.status !== undefined) {
-    updates.push(`status = $${idx++}`)
-    values.push(data.status)
-  }
-
-  if (updates.length === 0) return null
-
-  updates.push('updated_at = NOW()')
-  values.push(id)
-
-  const query = `
+export async function updateProject(id: number, data: Partial<{ name: string; description: string; status: string }>): Promise<Project | null> {
+  // Build update dynamically using template literals
+  const { rows } = await sql`
     UPDATE projects 
-    SET ${updates.join(', ')} 
-    WHERE id = $${idx}
+    SET 
+      name = COALESCE(${data.name ?? null}, name),
+      description = COALESCE(${data.description ?? null}, description),
+      updated_at = NOW()
+    WHERE id = ${id}
     RETURNING *
   `
-  
-  const { rows } = await sql.query(query, values)
-  return rows[0]
+  return (rows[0] as unknown as Project) || null
 }
 
 // ============================================
