@@ -3,6 +3,36 @@ import { neon, neonConfig } from '@neondatabase/serverless'
 // Configure Neon for serverless
 neonConfig.fetchConnectionCache = true
 
+// Type definitions
+export interface Project {
+  id: number
+  name: string
+  description?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface User {
+  id: number
+  email: string
+  name?: string
+  avatar_url?: string
+  created_at?: string
+}
+
+export interface Issue {
+  id: number
+  project_id: number
+  title: string
+  description?: string
+  status: string
+  priority: number
+  assignee_id?: number
+  milestone_id?: number
+  created_at?: string
+  updated_at?: string
+}
+
 // Initialize Neon client
 const neonSql = neon(process.env.DATABASE_URL!)
 
