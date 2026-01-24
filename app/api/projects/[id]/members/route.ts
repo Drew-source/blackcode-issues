@@ -12,7 +12,7 @@ import {
 // GET /api/projects/:id/members - List project members
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -20,7 +20,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const projectId = parseInt(params.id)
+    const { id } = await params
+    const projectId = parseInt(id)
     if (isNaN(projectId)) {
       return NextResponse.json(
         { error: 'Invalid project ID', suggestion: 'ID must be an integer' },
@@ -42,7 +43,7 @@ export async function GET(
 // POST /api/projects/:id/members - Add member to project
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -50,7 +51,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const projectId = parseInt(params.id)
+    const { id } = await params
+    const projectId = parseInt(id)
     if (isNaN(projectId)) {
       return NextResponse.json(
         { error: 'Invalid project ID', suggestion: 'ID must be an integer' },
@@ -113,7 +115,7 @@ export async function POST(
 // DELETE /api/projects/:id/members - Remove member from project
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -121,7 +123,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const projectId = parseInt(params.id)
+    const { id } = await params
+    const projectId = parseInt(id)
     if (isNaN(projectId)) {
       return NextResponse.json(
         { error: 'Invalid project ID', suggestion: 'ID must be an integer' },
@@ -158,4 +161,3 @@ export async function DELETE(
     )
   }
 }
-
