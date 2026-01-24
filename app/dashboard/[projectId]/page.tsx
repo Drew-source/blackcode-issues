@@ -10,6 +10,28 @@ interface Project {
   description?: string
 }
 
+interface Issue {
+  id: number
+  title: string
+  description?: string
+  status: string
+  priority: number
+  assignee_id?: number
+  assignee_name?: string
+  assignee_avatar?: string
+  milestone_id?: number
+  milestone_name?: string
+  labels?: string[]
+  comment_count: number
+  attachment_count: number
+  created_at: string
+  updated_at: string
+}
+
+interface KanbanData {
+  [status: string]: Issue[]
+}
+
 export default async function ProjectPage({
   params,
 }: {
@@ -23,7 +45,7 @@ export default async function ProjectPage({
 
   const { projectId: projectIdStr } = await params
   const projectId = parseInt(projectIdStr)
-  const [projectData, kanban] = await Promise.all([
+  const [projectData, kanbanData] = await Promise.all([
     getProject(projectId),
     getKanbanView(projectId),
   ])
@@ -37,6 +59,9 @@ export default async function ProjectPage({
     name: projectData.name,
     description: projectData.description,
   }
+
+  // Type assertion for kanban data
+  const kanban = kanbanData as KanbanData
 
   return (
     <KanbanBoard
