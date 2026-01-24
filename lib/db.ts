@@ -62,13 +62,13 @@ export async function getProject(id: number): Promise<Project | null> {
   return (rows[0] as unknown as Project) || null
 }
 
-export async function createProject(data: { name: string; description?: string; owner_id?: number }) {
+export async function createProject(data: { name: string; description?: string; owner_id?: number }): Promise<Project> {
   const { rows } = await sql`
     INSERT INTO projects (name, description, owner_id)
     VALUES (${data.name}, ${data.description || null}, ${data.owner_id || null})
     RETURNING *
   `
-  const project = rows[0]
+  const project = rows[0] as unknown as Project
   
   // Automatically add creator as project owner
   if (data.owner_id && project) {
@@ -109,7 +109,7 @@ export async function updateProject(id: number, data: Partial<{ name: string; de
   `
   
   const { rows } = await sql.query(query, values)
-  return rows[0]
+  return rows[0] as unknown as Project
 }
 
 // ============================================
@@ -202,7 +202,7 @@ export async function createIssue(data: {
   assignee_id?: number
   milestone_id?: number
   reporter_id?: number
-}) {
+}): Promise<Issue> {
   const { rows } = await sql`
     INSERT INTO issues (
       project_id, title, description, status, priority, 
@@ -220,7 +220,7 @@ export async function createIssue(data: {
     )
     RETURNING *
   `
-  return rows[0]
+  return rows[0] as unknown as Issue
 }
 
 export async function updateIssue(id: number, data: Partial<{
@@ -273,10 +273,10 @@ export async function updateIssue(id: number, data: Partial<{
   `
   
   const { rows } = await sql.query(query, values)
-  return rows[0]
+  return rows[0] as unknown as Issue
 }
 
-export async function deleteIssue(id: number) {
+export async function deleteIssue(id: number): Promise<void> {
   await sql`DELETE FROM issues WHERE id = ${id}`
 }
 
@@ -436,11 +436,11 @@ export async function getUsers() {
   return rows
 }
 
-export async function getUserByEmail(email: string) {
+export async function getUserByEmail(email: string): Promise<{ id: number; name: string; email: string; avatar_url: string } | null> {
   const { rows } = await sql`
     SELECT * FROM users WHERE email = ${email}
   `
-  return rows[0] || null
+  return (rows[0] as { id: number; name: string; email: string; avatar_url: string }) || null
 }
 
 // ============================================
