@@ -113,17 +113,14 @@ body {
 
 /* Kanban column styling */
 .kanban-column {
-  @apply bg-zinc-800/50 rounded-xl p-4 min-h-[500px];
+  @apply bg-secondary/50 rounded-xl p-4 min-h-[500px];
 }
 
 .kanban-card {
-  @apply rounded-lg p-4 shadow-sm border transition-all cursor-pointer;
-  background: var(--card);
-  border-color: var(--border);
+  @apply bg-card rounded-lg p-4 shadow-sm border border-border hover:border-primary/50 transition-all cursor-pointer;
 }
 
 .kanban-card:hover {
-  border-color: var(--primary);
   @apply shadow-md;
 }
 
@@ -148,7 +145,6 @@ body {
 
 /* Glass effect for modals */
 .glass {
-  @apply backdrop-blur-xl;
-  background: rgba(17, 17, 24, 0.8);
+  @apply bg-card/80 backdrop-blur-xl;
 }
 

@@ -1,13 +1,13 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '../../api/auth/[...nextauth]/route'
-import { KanbanBoard } from '@/components/kanban-board'
+import { ProjectView } from '@/components/project-view'
 import { getProject, getKanbanView } from '@/lib/db'
 
 export default async function ProjectPage({
   params,
 }: {
-  params: Promise<{ projectId: string }>
+  params: { projectId: string }
 }) {
   const session = await getServerSession(authOptions)
 
@@ -15,8 +15,7 @@ export default async function ProjectPage({
     redirect('/login')
   }
 
-  const { projectId: projectIdStr } = await params
-  const projectId = parseInt(projectIdStr)
+  const projectId = parseInt(params.projectId)
   const [project, kanban] = await Promise.all([
     getProject(projectId),
     getKanbanView(projectId),
@@ -27,10 +26,11 @@ export default async function ProjectPage({
   }
 
   return (
-    <KanbanBoard
+    <ProjectView
       project={project}
       initialKanban={kanban}
       user={session.user}
     />
   )
 }
+

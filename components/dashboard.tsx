@@ -5,6 +5,7 @@ import { signOut } from 'next-auth/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import {
@@ -42,6 +43,7 @@ export function Dashboard({ user }: { user: User }) {
   const { theme, setTheme } = useTheme()
   const [showNewProject, setShowNewProject] = useState(false)
   const queryClient = useQueryClient()
+  const pathname = usePathname()
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
@@ -88,11 +90,21 @@ export function Dashboard({ user }: { user: User }) {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
-          <NavItem icon={<LayoutGrid size={18} />} label="Projects" active />
-          <NavItem icon={<List size={18} />} label="All Issues" />
-          <NavItem icon={<Target size={18} />} label="Milestones" />
-          <NavItem icon={<BarChart3 size={18} />} label="Analytics" />
-          <NavItem icon={<Clock size={18} />} label="Activity" />
+          <Link href="/dashboard" className="block">
+            <NavItem icon={<LayoutGrid size={18} />} label="Projects" active={pathname === '/dashboard'} />
+          </Link>
+          <Link href="/dashboard/issues" className="block">
+            <NavItem icon={<List size={18} />} label="All Issues" active={pathname?.startsWith('/dashboard/issues')} />
+          </Link>
+          <Link href="/dashboard/milestones" className="block">
+            <NavItem icon={<Target size={18} />} label="Milestones" active={pathname === '/dashboard/milestones'} />
+          </Link>
+          <Link href="/dashboard/analytics" className="block">
+            <NavItem icon={<BarChart3 size={18} />} label="Analytics" active={pathname === '/dashboard/analytics'} />
+          </Link>
+          <Link href="/dashboard/activity" className="block">
+            <NavItem icon={<Clock size={18} />} label="Activity" active={pathname === '/dashboard/activity'} />
+          </Link>
         </nav>
 
         {/* User */}
@@ -226,7 +238,7 @@ function NavItem({
   active?: boolean
 }) {
   return (
-    <button
+    <div
       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
         active
           ? 'bg-primary/10 text-primary'
@@ -235,7 +247,7 @@ function NavItem({
     >
       {icon}
       <span className="font-medium">{label}</span>
-    </button>
+    </div>
   )
 }
 

@@ -14,16 +14,20 @@ export async function GET(request: NextRequest) {
     const projectId = searchParams.get('project_id')
     const status = searchParams.get('status')
     const priority = searchParams.get('priority')
+    const assigneeId = searchParams.get('assignee_id')
     const limit = searchParams.get('limit')
     const offset = searchParams.get('offset')
+    const includeProject = searchParams.get('includeProject') === 'true'
 
     const issues = await getIssues(
       projectId ? parseInt(projectId) : undefined,
       {
         status: status || undefined,
         priority: priority ? parseInt(priority) : undefined,
+        assignee_id: assigneeId ? parseInt(assigneeId) : undefined,
         limit: limit ? parseInt(limit) : undefined,
         offset: offset ? parseInt(offset) : undefined,
+        includeProject,
       }
     )
 

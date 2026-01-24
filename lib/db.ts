@@ -1,39 +1,10 @@
-import { neon, neonConfig } from '@neondatabase/serverless'
-import type { Project, Issue, KanbanData, Milestone, Comment, ProjectMember, TransactionLog } from '@/types'
-
-// Configure Neon for serverless
-neonConfig.fetchConnectionCache = true
-
-// Initialize Neon client - wraps to match @vercel/postgres API
-const neonSql = neon(process.env.DATABASE_URL!)
-
-// Wrapper to return { rows } like @vercel/postgres
-interface SqlFunction {
-  (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }>
-  query: (query: string, params: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
-}
-
-const baseSql = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
-  const rows = await neonSql(strings, ...values)
-  return { rows: rows as Record<string, unknown>[] }
-}
-
-// For raw queries with parameters - cast to any to bypass TS
-const rawQuery = async (query: string, params: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = await (neonSql as any)(query, params)
-  return { rows: rows as Record<string, unknown>[] }
-}
-
-// Combine into sql object
-const sql = baseSql as SqlFunction
-sql.query = rawQuery
+import { sql } from '@vercel/postgres'
 
 // ============================================
 // PROJECTS
 // ============================================
 
-export async function getProjects(userId?: number): Promise<Project[]> {
+export async function getProjects(userId?: number) {
   // If userId provided, only return projects they're a member of
   // If not, return all projects (for admin/backwards compatibility)
   if (userId) {
@@ -49,7 +20,7 @@ export async function getProjects(userId?: number): Promise<Project[]> {
       GROUP BY p.id, pm.role
       ORDER BY p.updated_at DESC
     `
-    return rows as unknown as Project[]
+    return rows
   }
   
   const { rows } = await sql`
@@ -62,23 +33,23 @@ export async function getProjects(userId?: number): Promise<Project[]> {
     GROUP BY p.id
     ORDER BY p.updated_at DESC
   `
-  return rows as unknown as Project[]
+  return rows
 }
 
-export async function getProject(id: number): Promise<Project | null> {
+export async function getProject(id: number) {
   const { rows } = await sql`
     SELECT * FROM projects WHERE id = ${id}
   `
-  return (rows[0] as unknown as Project) || null
+  return rows[0] || null
 }
 
-export async function createProject(data: { name: string; description?: string; owner_id?: number }): Promise<Project> {
+export async function createProject(data: { name: string; description?: string; owner_id?: number }) {
   const { rows } = await sql`
     INSERT INTO projects (name, description, owner_id)
     VALUES (${data.name}, ${data.description || null}, ${data.owner_id || null})
     RETURNING *
   `
-  const project = rows[0] as unknown as Project
+  const project = rows[0]
   
   // Automatically add creator as project owner
   if (data.owner_id && project) {
@@ -88,19 +59,38 @@ export async function createProject(data: { name: string; description?: string; 
   return project
 }
 
-export async function updateProject(id: number, data: Partial<{ name: string; description: string; status: string }>): Promise<Project | null> {
-  // Use tagged template literal - update all fields (null values are preserved)
-  const { rows } = await sql`
+export async function updateProject(id: number, data: Partial<{ name: string; description: string; status: string }>) {
+  const updates = []
+  const values = []
+  let idx = 1
+
+  if (data.name !== undefined) {
+    updates.push(`name = $${idx++}`)
+    values.push(data.name)
+  }
+  if (data.description !== undefined) {
+    updates.push(`description = $${idx++}`)
+    values.push(data.description)
+  }
+  if (data.status !== undefined) {
+    updates.push(`status = $${idx++}`)
+    values.push(data.status)
+  }
+
+  if (updates.length === 0) return null
+
+  updates.push('updated_at = NOW()')
+  values.push(id)
+
+  const query = `
     UPDATE projects 
-    SET 
-      name = COALESCE(${data.name ?? null}, name),
-      description = COALESCE(${data.description ?? null}, description),
-      status = COALESCE(${data.status ?? null}, status),
-      updated_at = NOW()
-    WHERE id = ${id}
+    SET ${updates.join(', ')} 
+    WHERE id = $${idx}
     RETURNING *
   `
-  return (rows[0] as unknown as Project) || null
+  
+  const { rows } = await sql.query(query, values)
+  return rows[0]
 }
 
 // ============================================
@@ -114,48 +104,63 @@ export async function getIssues(projectId?: number, options?: {
   milestone_id?: number
   limit?: number
   offset?: number
-}): Promise<Issue[]> {
-  // Use tagged template literal for Neon compatibility
-  // For complex filtering, we'd need multiple query variants
-  if (projectId && !options?.status && !options?.priority && !options?.assignee_id && !options?.milestone_id) {
-    // Simple case: just project_id filter (used by getKanbanView)
-    const { rows } = await sql`
-      SELECT 
-        i.*,
-        u.name as assignee_name,
-        u.avatar_url as assignee_avatar,
-        m.name as milestone_name,
-        (SELECT COUNT(*)::int FROM comments c WHERE c.issue_id = i.id) as comment_count,
-        (SELECT COUNT(*)::int FROM attachments a WHERE a.issue_id = i.id) as attachment_count
-      FROM issues i
-      LEFT JOIN users u ON u.id = i.assignee_id
-      LEFT JOIN milestones m ON m.id = i.milestone_id
-      WHERE i.project_id = ${projectId}
-      ORDER BY i.priority ASC, i.updated_at DESC
-      LIMIT ${options?.limit || 1000}
-    `
-    return rows as unknown as Issue[]
-  }
-  
-  // All issues (no filter)
-  const { rows } = await sql`
+  includeProject?: boolean
+}) {
+  let query = `
     SELECT 
       i.*,
       u.name as assignee_name,
       u.avatar_url as assignee_avatar,
       m.name as milestone_name,
+      ${options?.includeProject ? 'p.name as project_name, p.id as project_id,' : ''}
       (SELECT COUNT(*)::int FROM comments c WHERE c.issue_id = i.id) as comment_count,
       (SELECT COUNT(*)::int FROM attachments a WHERE a.issue_id = i.id) as attachment_count
     FROM issues i
     LEFT JOIN users u ON u.id = i.assignee_id
     LEFT JOIN milestones m ON m.id = i.milestone_id
-    ORDER BY i.priority ASC, i.updated_at DESC
-    LIMIT 1000
+    ${options?.includeProject ? 'LEFT JOIN projects p ON p.id = i.project_id' : ''}
+    WHERE 1=1
   `
-  return rows as unknown as Issue[]
+  const params: any[] = []
+  let paramIdx = 1
+
+  if (projectId) {
+    query += ` AND i.project_id = $${paramIdx++}`
+    params.push(projectId)
+  }
+  if (options?.status) {
+    query += ` AND i.status = $${paramIdx++}`
+    params.push(options.status)
+  }
+  if (options?.priority) {
+    query += ` AND i.priority = $${paramIdx++}`
+    params.push(options.priority)
+  }
+  if (options?.assignee_id) {
+    query += ` AND i.assignee_id = $${paramIdx++}`
+    params.push(options.assignee_id)
+  }
+  if (options?.milestone_id) {
+    query += ` AND i.milestone_id = $${paramIdx++}`
+    params.push(options.milestone_id)
+  }
+
+  query += ` ORDER BY i.priority ASC, i.updated_at DESC`
+
+  if (options?.limit) {
+    query += ` LIMIT $${paramIdx++}`
+    params.push(options.limit)
+  }
+  if (options?.offset) {
+    query += ` OFFSET $${paramIdx++}`
+    params.push(options.offset)
+  }
+
+  const { rows } = await sql.query(query, params)
+  return rows
 }
 
-export async function getIssue(id: number): Promise<Issue | null> {
+export async function getIssue(id: number) {
   const { rows } = await sql`
     SELECT 
       i.*,
@@ -169,7 +174,7 @@ export async function getIssue(id: number): Promise<Issue | null> {
     LEFT JOIN milestones m ON m.id = i.milestone_id
     WHERE i.id = ${id}
   `
-  return (rows[0] as unknown as Issue) || null
+  return rows[0] || null
 }
 
 export async function createIssue(data: {
@@ -181,7 +186,7 @@ export async function createIssue(data: {
   assignee_id?: number
   milestone_id?: number
   reporter_id?: number
-}): Promise<Issue> {
+}) {
   const { rows } = await sql`
     INSERT INTO issues (
       project_id, title, description, status, priority, 
@@ -199,7 +204,7 @@ export async function createIssue(data: {
     )
     RETURNING *
   `
-  return rows[0] as unknown as Issue
+  return rows[0]
 }
 
 export async function updateIssue(id: number, data: Partial<{
@@ -209,25 +214,53 @@ export async function updateIssue(id: number, data: Partial<{
   priority: number
   assignee_id: number | null
   milestone_id: number | null
-}>): Promise<Issue | null> {
-  // Use CASE to only update fields that were provided
-  const { rows } = await sql`
+}>) {
+  const updates: string[] = []
+  const values: any[] = []
+  let idx = 1
+
+  if (data.title !== undefined) {
+    updates.push(`title = $${idx++}`)
+    values.push(data.title)
+  }
+  if (data.description !== undefined) {
+    updates.push(`description = $${idx++}`)
+    values.push(data.description)
+  }
+  if (data.status !== undefined) {
+    updates.push(`status = $${idx++}`)
+    values.push(data.status)
+  }
+  if (data.priority !== undefined) {
+    updates.push(`priority = $${idx++}`)
+    values.push(data.priority)
+  }
+  if (data.assignee_id !== undefined) {
+    updates.push(`assignee_id = $${idx++}`)
+    values.push(data.assignee_id)
+  }
+  if (data.milestone_id !== undefined) {
+    updates.push(`milestone_id = $${idx++}`)
+    values.push(data.milestone_id)
+  }
+
+  if (updates.length === 0) return null
+
+  updates.push('updated_at = NOW()')
+  values.push(id)
+
+  const query = `
     UPDATE issues 
-    SET 
-      title = CASE WHEN ${data.title !== undefined} THEN ${data.title ?? null} ELSE title END,
-      description = CASE WHEN ${data.description !== undefined} THEN ${data.description ?? null} ELSE description END,
-      status = CASE WHEN ${data.status !== undefined} THEN ${data.status ?? null} ELSE status END,
-      priority = CASE WHEN ${data.priority !== undefined} THEN ${data.priority ?? null} ELSE priority END,
-      assignee_id = CASE WHEN ${data.assignee_id !== undefined} THEN ${data.assignee_id ?? null} ELSE assignee_id END,
-      milestone_id = CASE WHEN ${data.milestone_id !== undefined} THEN ${data.milestone_id ?? null} ELSE milestone_id END,
-      updated_at = NOW()
-    WHERE id = ${id}
+    SET ${updates.join(', ')} 
+    WHERE id = $${idx}
     RETURNING *
   `
-  return (rows[0] as unknown as Issue) || null
+  
+  const { rows } = await sql.query(query, values)
+  return rows[0]
 }
 
-export async function deleteIssue(id: number): Promise<void> {
+export async function deleteIssue(id: number) {
   await sql`DELETE FROM issues WHERE id = ${id}`
 }
 
@@ -235,10 +268,10 @@ export async function deleteIssue(id: number): Promise<void> {
 // KANBAN VIEW
 // ============================================
 
-export async function getKanbanView(projectId: number): Promise<KanbanData> {
+export async function getKanbanView(projectId: number) {
   const issues = await getIssues(projectId)
   
-  const kanban: KanbanData = {
+  const kanban: Record<string, typeof issues> = {
     backlog: [],
     todo: [],
     in_progress: [],
@@ -277,6 +310,22 @@ export async function getMilestones(projectId: number) {
   return rows
 }
 
+export async function getAllMilestones() {
+  const { rows } = await sql`
+    SELECT 
+      m.*,
+      p.name as project_name,
+      COUNT(i.id)::int as issue_count,
+      COUNT(i.id) FILTER (WHERE i.status = 'done')::int as completed_issues
+    FROM milestones m
+    LEFT JOIN projects p ON p.id = m.project_id
+    LEFT JOIN issues i ON i.milestone_id = m.id
+    GROUP BY m.id, p.name
+    ORDER BY m.due_date ASC NULLS LAST
+  `
+  return rows
+}
+
 export async function createMilestone(data: {
   project_id: number
   name: string
@@ -289,6 +338,48 @@ export async function createMilestone(data: {
     RETURNING *
   `
   return rows[0]
+}
+
+export async function updateMilestone(id: number, data: Partial<{
+  name: string
+  description: string
+  due_date: string
+}>) {
+  const updates: string[] = []
+  const values: any[] = []
+  let idx = 1
+
+  if (data.name !== undefined) {
+    updates.push(`name = $${idx++}`)
+    values.push(data.name)
+  }
+  if (data.description !== undefined) {
+    updates.push(`description = $${idx++}`)
+    values.push(data.description)
+  }
+  if (data.due_date !== undefined) {
+    updates.push(`due_date = $${idx++}`)
+    values.push(data.due_date)
+  }
+
+  if (updates.length === 0) return null
+
+  updates.push('updated_at = NOW()')
+  values.push(id)
+
+  const query = `
+    UPDATE milestones 
+    SET ${updates.join(', ')} 
+    WHERE id = $${idx}
+    RETURNING *
+  `
+  
+  const { rows } = await sql.query(query, values)
+  return rows[0]
+}
+
+export async function deleteMilestone(id: number) {
+  await sql`DELETE FROM milestones WHERE id = ${id}`
 }
 
 // ============================================
@@ -371,7 +462,7 @@ export async function getProjectMemberRole(projectId: number, userId: number): P
     SELECT role FROM project_members 
     WHERE project_id = ${projectId} AND user_id = ${userId}
   `
-  return (rows[0]?.role as string) || null
+  return rows[0]?.role || null
 }
 
 // ============================================
@@ -387,11 +478,11 @@ export async function getUsers() {
   return rows
 }
 
-export async function getUserByEmail(email: string): Promise<{ id: number; name: string; email: string; avatar_url: string } | null> {
+export async function getUserByEmail(email: string) {
   const { rows } = await sql`
     SELECT * FROM users WHERE email = ${email}
   `
-  return (rows[0] as { id: number; name: string; email: string; avatar_url: string }) || null
+  return rows[0] || null
 }
 
 // ============================================
@@ -432,6 +523,20 @@ export async function getTransactionLog(limit = 50) {
   return rows
 }
 
+export async function getActivityFeed(limit = 50, offset = 0) {
+  const { rows } = await sql`
+    SELECT 
+      t.*,
+      u.name as user_name,
+      u.avatar_url as user_avatar
+    FROM transaction_log t
+    LEFT JOIN users u ON u.id = t.user_id
+    ORDER BY t.created_at DESC
+    LIMIT ${limit} OFFSET ${offset}
+  `
+  return rows
+}
+
 export async function undoLastOperations(userId: number, count = 1) {
   // Get last N operations for this user
   const { rows: operations } = await sql`
@@ -443,15 +548,87 @@ export async function undoLastOperations(userId: number, count = 1) {
 
   const results = []
   for (const op of operations) {
-    // TODO: Implement proper rollback with dynamic table/column names
-    // For now, just mark as rolled back (complex dynamic SQL not supported by Neon tagged templates)
-    // Full rollback would need a different approach (stored procedures or multiple queries)
-    
+    // Restore old data
+    if (op.operation_type === 'UPDATE' && op.old_data) {
+      await sql.query(
+        `UPDATE ${op.table_name} SET ${Object.keys(op.old_data).map((k, i) => `${k} = $${i + 1}`).join(', ')} WHERE id = $${Object.keys(op.old_data).length + 1}`,
+        [...Object.values(op.old_data), op.record_id]
+      )
+    } else if (op.operation_type === 'INSERT') {
+      await sql.query(`DELETE FROM ${op.table_name} WHERE id = $1`, [op.record_id])
+    } else if (op.operation_type === 'DELETE' && op.old_data) {
+      const cols = Object.keys(op.old_data)
+      const vals = Object.values(op.old_data)
+      await sql.query(
+        `INSERT INTO ${op.table_name} (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')})`,
+        vals
+      )
+    }
+
     // Mark as rolled back
-    await sql`UPDATE transaction_log SET rolled_back = true WHERE id = ${(op as any).id}`
+    await sql`UPDATE transaction_log SET rolled_back = true WHERE id = ${op.id}`
     results.push(op)
   }
 
   return results
+}
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+export async function getAnalytics() {
+  // Issues by status
+  const { rows: issuesByStatus } = await sql`
+    SELECT status, COUNT(*)::int as count
+    FROM issues
+    GROUP BY status
+    ORDER BY count DESC
+  `
+
+  // Issues by project
+  const { rows: issuesByProject } = await sql`
+    SELECT 
+      p.id,
+      p.name,
+      COUNT(i.id)::int as count
+    FROM projects p
+    LEFT JOIN issues i ON i.project_id = p.id
+    GROUP BY p.id, p.name
+    ORDER BY count DESC
+    LIMIT 10
+  `
+
+  // Top assignees
+  const { rows: topAssignees } = await sql`
+    SELECT 
+      u.id,
+      u.name,
+      u.avatar_url,
+      COUNT(i.id)::int as count
+    FROM users u
+    INNER JOIN issues i ON i.assignee_id = u.id
+    GROUP BY u.id, u.name, u.avatar_url
+    ORDER BY count DESC
+    LIMIT 10
+  `
+
+  // Issues created per day (last 30 days)
+  const { rows: issuesOverTime } = await sql`
+    SELECT 
+      DATE(created_at) as date,
+      COUNT(*)::int as count
+    FROM issues
+    WHERE created_at >= NOW() - INTERVAL '30 days'
+    GROUP BY DATE(created_at)
+    ORDER BY date ASC
+  `
+
+  return {
+    issuesByStatus,
+    issuesByProject,
+    topAssignees,
+    issuesOverTime,
+  }
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -10,15 +10,23 @@ import Image from 'next/image'
 import {
   ArrowLeft,
   Plus,
+  MoreHorizontal,
   MessageSquare,
   Paperclip,
+  Clock,
+  AlertCircle,
+  ChevronDown,
   Search,
   Filter,
+  Calendar,
+  User2,
+  Tag,
   Undo2,
   X,
+  LayoutGrid,
+  List,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import type { Issue as IssueType, Project as ProjectType, KanbanData } from '@/types'
 
 // Status configuration
 const STATUSES = [
@@ -38,9 +46,33 @@ const PRIORITY_CONFIG = {
   5: { label: 'None', color: 'text-gray-400', bg: 'bg-gray-400/10' },
 } as const
 
-// Re-export types for local use
-type Issue = IssueType
-type Project = ProjectType
+interface Issue {
+  id: number
+  title: string
+  description?: string
+  status: string
+  priority: number
+  assignee_id?: number
+  assignee_name?: string
+  assignee_avatar?: string
+  milestone_id?: number
+  milestone_name?: string
+  labels?: string[]
+  comment_count: number
+  attachment_count: number
+  created_at: string
+  updated_at: string
+}
+
+interface Project {
+  id: number
+  name: string
+  description?: string
+}
+
+interface KanbanData {
+  [status: string]: Issue[]
+}
 
 interface User {
   name?: string | null
@@ -52,10 +84,14 @@ export function KanbanBoard({
   project,
   initialKanban,
   user,
+  view = 'kanban',
+  onViewChange,
 }: {
   project: Project
   initialKanban: KanbanData
   user: User
+  view?: 'kanban' | 'timeline'
+  onViewChange?: (view: 'kanban' | 'timeline') => void
 }) {
   const [kanban, setKanban] = useState<KanbanData>(initialKanban)
   const [searchQuery, setSearchQuery] = useState('')
@@ -81,7 +117,14 @@ export function KanbanBoard({
   })
 
   const createIssue = useMutation({
-    mutationFn: async (data: { title: string; status: string }) => {
+    mutationFn: async (data: {
+      title: string
+      description?: string
+      status: string
+      priority?: number
+      assignee_id?: number
+      milestone_id?: number
+    }) => {
       const res = await fetch('/api/issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -173,6 +216,34 @@ export function KanbanBoard({
             </div>
 
             <div className="flex items-center gap-3">
+              {/* View Toggle */}
+              {onViewChange && (
+                <div className="flex items-center gap-1 bg-background border border-input rounded-lg p-1">
+                  <button
+                    onClick={() => onViewChange('kanban')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      view === 'kanban'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <LayoutGrid size={16} className="inline mr-1.5" />
+                    Kanban
+                  </button>
+                  <button
+                    onClick={() => onViewChange('timeline')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      view === 'timeline'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <List size={16} className="inline mr-1.5" />
+                    Timeline
+                  </button>
+                </div>
+              )}
+
               {/* Search */}
               <div className="relative">
                 <Search
@@ -213,11 +284,12 @@ export function KanbanBoard({
                 key={status.id}
                 status={status}
                 issues={filterIssues(kanban[status.id] || [])}
+                projectId={project.id}
                 onNewIssue={() => setShowNewIssue(status.id)}
                 showNewIssue={showNewIssue === status.id}
                 onCancelNewIssue={() => setShowNewIssue(null)}
-                onCreateIssue={(title) =>
-                  createIssue.mutate({ title, status: status.id })
+                onCreateIssue={(data) =>
+                  createIssue.mutate({ ...data, status: status.id })
                 }
                 isCreating={createIssue.isPending}
                 onSelectIssue={setSelectedIssue}
@@ -243,6 +315,7 @@ export function KanbanBoard({
 function Column({
   status,
   issues,
+  projectId,
   onNewIssue,
   showNewIssue,
   onCancelNewIssue,
@@ -252,14 +325,54 @@ function Column({
 }: {
   status: typeof STATUSES[number]
   issues: Issue[]
+  projectId: number
   onNewIssue: () => void
   showNewIssue: boolean
   onCancelNewIssue: () => void
-  onCreateIssue: (title: string) => void
+  onCreateIssue: (data: {
+    title: string
+    description?: string
+    priority?: number
+    assignee_id?: number
+    milestone_id?: number
+  }) => void
   isCreating: boolean
   onSelectIssue: (issue: Issue) => void
 }) {
   const [newTitle, setNewTitle] = useState('')
+  const [showExpanded, setShowExpanded] = useState(false)
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<number>(3)
+  const [assigneeId, setAssigneeId] = useState<number | undefined>(undefined)
+  const [milestoneId, setMilestoneId] = useState<number | undefined>(undefined)
+
+  const resetForm = () => {
+    setNewTitle('')
+    setDescription('')
+    setPriority(3)
+    setAssigneeId(undefined)
+    setMilestoneId(undefined)
+    setShowExpanded(false)
+  }
+
+  // Fetch project members and milestones
+  const { data: members = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/members`)
+      if (!res.ok) return []
+      return res.json()
+    },
+  })
+
+  const { data: milestones = [] } = useQuery({
+    queryKey: ['milestones', projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/milestones?project_id=${projectId}`)
+      if (!res.ok) return []
+      return res.json()
+    },
+  })
 
   const colorClasses = {
     gray: 'bg-gray-500',
@@ -308,48 +421,122 @@ function Column({
                   exit={{ opacity: 0, y: -10 }}
                   className="mb-3"
                 >
-                  <div className="bg-card rounded-lg border border-primary p-3 shadow-lg">
-                    <textarea
+                  <div className="bg-card rounded-lg border border-primary p-3 shadow-lg space-y-3">
+                    <input
                       autoFocus
                       placeholder="Issue title..."
                       value={newTitle}
                       onChange={(e) => setNewTitle(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey && newTitle.trim()) {
+                        if (e.key === 'Enter' && !e.shiftKey && newTitle.trim() && !showExpanded) {
                           e.preventDefault()
-                          onCreateIssue(newTitle.trim())
-                          setNewTitle('')
+                          onCreateIssue({ title: newTitle.trim() })
+                          resetForm()
                         }
                         if (e.key === 'Escape') {
+                          resetForm()
                           onCancelNewIssue()
-                          setNewTitle('')
                         }
                       }}
-                      className="w-full bg-transparent resize-none focus:outline-none text-sm"
-                      rows={2}
+                      className="w-full px-2 py-1.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
-                    <div className="flex justify-end gap-2 mt-2">
-                      <button
-                        onClick={() => {
-                          onCancelNewIssue()
-                          setNewTitle('')
-                        }}
-                        className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+
+                    {showExpanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="space-y-3"
                       >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (newTitle.trim()) {
-                            onCreateIssue(newTitle.trim())
-                            setNewTitle('')
+                        <textarea
+                          placeholder="Description (optional)..."
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                          rows={3}
+                        />
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            value={priority}
+                            onChange={(e) => setPriority(parseInt(e.target.value))}
+                            className="w-full px-2 py-1.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            <option value={1}>Urgent</option>
+                            <option value={2}>High</option>
+                            <option value={3}>Medium</option>
+                            <option value={4}>Low</option>
+                          </select>
+
+                          <select
+                            value={assigneeId || ''}
+                            onChange={(e) =>
+                              setAssigneeId(e.target.value ? parseInt(e.target.value) : undefined)
+                            }
+                            className="w-full px-2 py-1.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="">Unassigned</option>
+                            {members.map((m: any) => (
+                              <option key={m.user_id} value={m.user_id}>
+                                {m.name || m.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <select
+                          value={milestoneId || ''}
+                          onChange={(e) =>
+                            setMilestoneId(e.target.value ? parseInt(e.target.value) : undefined)
                           }
-                        }}
-                        disabled={!newTitle.trim() || isCreating}
-                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50"
+                          className="w-full px-2 py-1.5 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="">No milestone</option>
+                          {milestones.map((m: any) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                      </motion.div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => setShowExpanded(!showExpanded)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
                       >
-                        {isCreating ? '...' : 'Create'}
+                        {showExpanded ? 'Less' : 'More options'}
                       </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            resetForm()
+                            onCancelNewIssue()
+                          }}
+                          className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (newTitle.trim()) {
+                              onCreateIssue({
+                                title: newTitle.trim(),
+                                description: description.trim() || undefined,
+                                priority,
+                                assignee_id: assigneeId,
+                                milestone_id: milestoneId,
+                              })
+                              resetForm()
+                            }
+                          }}
+                          disabled={!newTitle.trim() || isCreating}
+                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md disabled:opacity-50"
+                        >
+                          {isCreating ? '...' : 'Create'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
