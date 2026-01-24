@@ -85,20 +85,20 @@ export async function getProject(id: number): Promise<Project | null> {
   return (rows[0] as unknown as Project) || null
 }
 
-export async function createProject(data: { name: string; description?: string; owner_id?: number }) {
+export async function createProject(data: { name: string; description?: string; owner_id?: number }): Promise<Project | null> {
   const { rows } = await sql`
     INSERT INTO projects (name, description, owner_id)
     VALUES (${data.name}, ${data.description || null}, ${data.owner_id || null})
     RETURNING *
   `
-  const project = rows[0]
+  const project = rows[0] as unknown as Project | undefined
   
   // Automatically add creator as project owner
   if (data.owner_id && project) {
     await addProjectMember(project.id, data.owner_id, 'owner')
   }
   
-  return project
+  return project || null
 }
 
 export async function updateProject(id: number, data: Partial<{ name: string; description: string; status: string }>) {
