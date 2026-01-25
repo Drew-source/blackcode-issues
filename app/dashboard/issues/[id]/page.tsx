@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import {
@@ -20,6 +20,7 @@ import {
   Tag,
   CheckCircle2,
   Clock,
+  Trash2,
 } from 'lucide-react'
 
 const STATUSES = [
@@ -67,8 +68,9 @@ interface Comment {
   created_at: string
 }
 
-export default function IssueDetailPage({ params }: { params: { id: string } }) {
+export default function IssueDetailPage() {
   const router = useRouter()
+  const params = useParams()
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [editedTitle, setEditedTitle] = useState('')
@@ -78,7 +80,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   const [editedAssigneeId, setEditedAssigneeId] = useState<number | null>(null)
   const [commentContent, setCommentContent] = useState('')
 
-  const issueId = parseInt(params.id)
+  const issueId = parseInt(params.id as string)
 
   // Fetch issue
   const { data: issue, isLoading } = useQuery<Issue>({
@@ -176,7 +178,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="p-8">
         <div className="max-w-4xl mx-auto">
           <div className="h-8 bg-card rounded-lg animate-pulse mb-4" />
           <div className="h-64 bg-card rounded-lg animate-pulse" />
@@ -187,7 +189,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
 
   if (!issue) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="p-8">
         <div className="max-w-4xl mx-auto text-center py-24">
           <h2 className="text-xl font-semibold mb-2">Issue not found</h2>
           <Link href="/dashboard/issues" className="text-primary hover:underline">
@@ -202,7 +204,7 @@ export default function IssueDetailPage({ params }: { params: { id: string } }) 
   const status = STATUSES.find((s) => s.id === issue.status)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       {/* Header */}
       <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border">
         <div className="px-6 py-4">

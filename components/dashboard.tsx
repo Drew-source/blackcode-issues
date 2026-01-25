@@ -1,27 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { signOut } from 'next-auth/react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import Image from 'next/image'
 import { toast } from 'sonner'
 import {
   Plus,
-  Settings,
-  LogOut,
-  Moon,
-  Sun,
   ChevronRight,
   LayoutGrid,
-  List,
-  BarChart3,
-  Clock,
-  Target,
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
 
 interface User {
   name?: string | null
@@ -40,10 +28,8 @@ interface Project {
 }
 
 export function Dashboard({ user }: { user: User }) {
-  const { theme, setTheme } = useTheme()
   const [showNewProject, setShowNewProject] = useState(false)
   const queryClient = useQueryClient()
-  const pathname = usePathname()
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
@@ -75,144 +61,66 @@ export function Dashboard({ user }: { user: User }) {
   })
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border flex flex-col">
-        {/* Logo */}
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">B</span>
-            </div>
-            <span className="font-bold">Blackcode Issues</span>
-          </div>
+    <div className="p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Projects</h1>
+          <p className="text-muted-foreground mt-1">
+            {projects.length} project{projects.length !== 1 ? 's' : ''}
+          </p>
         </div>
+        <button
+          onClick={() => setShowNewProject(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+        >
+          <Plus size={18} />
+          New Project
+        </button>
+      </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
-          <Link href="/dashboard" className="block">
-            <NavItem icon={<LayoutGrid size={18} />} label="Projects" active={pathname === '/dashboard'} />
-          </Link>
-          <Link href="/dashboard/issues" className="block">
-            <NavItem icon={<List size={18} />} label="All Issues" active={pathname?.startsWith('/dashboard/issues')} />
-          </Link>
-          <Link href="/dashboard/milestones" className="block">
-            <NavItem icon={<Target size={18} />} label="Milestones" active={pathname === '/dashboard/milestones'} />
-          </Link>
-          <Link href="/dashboard/analytics" className="block">
-            <NavItem icon={<BarChart3 size={18} />} label="Analytics" active={pathname === '/dashboard/analytics'} />
-          </Link>
-          <Link href="/dashboard/activity" className="block">
-            <NavItem icon={<Clock size={18} />} label="Activity" active={pathname === '/dashboard/activity'} />
-          </Link>
-        </nav>
-
-        {/* User */}
-        <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-3 mb-4">
-            {user.image && (
-              <Image
-                src={user.image}
-                alt={user.name || 'User'}
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{user.name}</p>
-              <p className="text-xs text-muted-foreground truncate">
-                {user.email}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              title="Toggle theme"
-            >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-            <button
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              title="Settings"
-            >
-              <Settings size={18} />
-            </button>
-            <button
-              onClick={() => signOut()}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors text-destructive"
-              title="Sign out"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
+      {/* Projects grid */}
+      {isLoading ? (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="h-40 bg-card rounded-xl border border-border animate-pulse"
+            />
+          ))}
         </div>
-      </aside>
-
-      {/* Main content */}
-      <main className="ml-64 p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Projects</h1>
-            <p className="text-muted-foreground mt-1">
-              {projects.length} project{projects.length !== 1 ? 's' : ''}
-            </p>
+      ) : projects.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-24"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-secondary rounded-2xl mb-4">
+            <LayoutGrid className="w-8 h-8 text-muted-foreground" />
           </div>
+          <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
+          <p className="text-muted-foreground mb-6">
+            Create your first project to get started
+          </p>
           <button
             onClick={() => setShowNewProject(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             <Plus size={18} />
-            New Project
+            Create Project
           </button>
-        </div>
-
-        {/* Projects grid */}
-        {isLoading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="h-40 bg-card rounded-xl border border-border animate-pulse"
-              />
-            ))}
-          </div>
-        ) : projects.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center py-24"
-          >
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-secondary rounded-2xl mb-4">
-              <LayoutGrid className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <h2 className="text-xl font-semibold mb-2">No projects yet</h2>
-            <p className="text-muted-foreground mb-6">
-              Create your first project to get started
-            </p>
-            <button
-              onClick={() => setShowNewProject(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-            >
-              <Plus size={18} />
-              Create Project
-            </button>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            {projects.map((project, index) => (
-              <ProjectCard key={project.id} project={project} index={index} />
-            ))}
-          </motion.div>
-        )}
-      </main>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
+          {projects.map((project, index) => (
+            <ProjectCard key={project.id} project={project} index={index} />
+          ))}
+        </motion.div>
+      )}
 
       {/* New project modal */}
       <AnimatePresence>
@@ -224,29 +132,6 @@ export function Dashboard({ user }: { user: User }) {
           />
         )}
       </AnimatePresence>
-    </div>
-  )
-}
-
-function NavItem({
-  icon,
-  label,
-  active = false,
-}: {
-  icon: React.ReactNode
-  label: string
-  active?: boolean
-}) {
-  return (
-    <div
-      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-        active
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-      }`}
-    >
-      {icon}
-      <span className="font-medium">{label}</span>
     </div>
   )
 }
@@ -393,4 +278,3 @@ function NewProjectModal({
     </>
   )
 }
-

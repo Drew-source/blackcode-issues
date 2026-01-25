@@ -162,7 +162,7 @@ export default function AllIssuesPage() {
     (projectFilter ? 1 : 0)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div>
       {/* Header */}
       <header className="sticky top-0 z-20 bg-card/80 backdrop-blur border-b border-border">
         <div className="px-6 py-4">
