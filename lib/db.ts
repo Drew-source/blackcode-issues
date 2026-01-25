@@ -206,7 +206,7 @@ export async function getIssue(id: number) {
     LEFT JOIN milestones m ON m.id = i.milestone_id
     WHERE i.id = ${id}
   `
-  return rows[0] || null
+  return (rows[0] as unknown as Issue) || null
 }
 
 export async function createIssue(data: {
@@ -236,7 +236,7 @@ export async function createIssue(data: {
     )
     RETURNING *
   `
-  return rows[0]
+  return (rows[0] as unknown as Issue) || null
 }
 
 export async function updateIssue(id: number, data: Partial<{
@@ -289,7 +289,7 @@ export async function updateIssue(id: number, data: Partial<{
   `
   
   const { rows } = await sql.query(query, values)
-  return rows[0]
+  return (rows[0] as unknown as Issue) || null
 }
 
 export async function deleteIssue(id: number) {
@@ -369,7 +369,7 @@ export async function createMilestone(data: {
     VALUES (${data.project_id}, ${data.name}, ${data.description || null}, ${data.due_date || null})
     RETURNING *
   `
-  return rows[0]
+  return rows[0] || null
 }
 
 export async function updateMilestone(id: number, data: Partial<{
@@ -407,7 +407,7 @@ export async function updateMilestone(id: number, data: Partial<{
   `
   
   const { rows } = await sql.query(query, values)
-  return rows[0]
+  return rows[0] || null
 }
 
 export async function deleteMilestone(id: number) {
@@ -442,7 +442,7 @@ export async function createComment(data: {
     VALUES (${data.issue_id}, ${data.user_id}, ${data.content})
     RETURNING *
   `
-  return rows[0]
+  return rows[0] || null
 }
 
 // ============================================
@@ -471,7 +471,7 @@ export async function addProjectMember(projectId: number, userId: number, role: 
     ON CONFLICT (project_id, user_id) DO UPDATE SET role = ${role}
     RETURNING *
   `
-  return rows[0]
+  return rows[0] || null
 }
 
 export async function removeProjectMember(projectId: number, userId: number) {
@@ -494,7 +494,7 @@ export async function getProjectMemberRole(projectId: number, userId: number): P
     SELECT role FROM project_members 
     WHERE project_id = ${projectId} AND user_id = ${userId}
   `
-  return rows[0]?.role || null
+  return (rows[0]?.role as string) || null
 }
 
 // ============================================
@@ -543,7 +543,7 @@ export async function logTransaction(data: {
     )
     RETURNING *
   `
-  return rows[0]
+  return rows[0] || null
 }
 
 export async function getTransactionLog(limit = 50) {
