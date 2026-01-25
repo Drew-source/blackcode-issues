@@ -99,6 +99,32 @@ export function KanbanBoard({
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const queryClient = useQueryClient()
 
+  // Fetch fresh data to keep kanban in sync
+  useQuery({
+    queryKey: ['project-issues', project.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/issues?project_id=${project.id}`)
+      if (!res.ok) throw new Error('Failed to fetch issues')
+      const issues: Issue[] = await res.json()
+      
+      // Group issues by status
+      const grouped: KanbanData = {}
+      for (const issue of issues) {
+        if (!grouped[issue.status]) {
+          grouped[issue.status] = []
+        }
+        grouped[issue.status].push(issue)
+      }
+      
+      // Update local state with fresh data
+      setKanban(grouped)
+      return grouped
+    },
+    refetchOnWindowFocus: true,
+    staleTime: 10000, // Consider data stale after 10 seconds
+    refetchInterval: 30000, // Refetch every 30 seconds
+  })
+
   const updateIssueStatus = useMutation({
     mutationFn: async ({ issueId, status }: { issueId: number; status: string }) => {
       const res = await fetch(`/api/issues/${issueId}`, {
@@ -137,12 +163,17 @@ export function KanbanBoard({
       return res.json()
     },
     onSuccess: (newIssue, variables) => {
+      // Optimistic update to local state
       setKanban((prev) => ({
         ...prev,
         [variables.status]: [...(prev[variables.status] || []), newIssue],
       }))
       setShowNewIssue(null)
       toast.success('Issue created!')
+      // Invalidate all related caches to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['all-issues'] })
+      queryClient.invalidateQueries({ queryKey: ['project-issues', project.id] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
     },
     onError: () => {
       toast.error('Failed to create issue')
