@@ -33,8 +33,11 @@ export interface Issue {
   updated_at?: string
 }
 
-// Initialize Neon client
+// Initialize Neon client - supports both tagged template and raw query forms
 const neonSql = neon(process.env.DATABASE_URL!)
+
+// Type for raw query support (neon supports both forms)
+type NeonSql = typeof neonSql & ((query: string, params?: unknown[]) => Promise<Record<string, unknown>[]>)
 
 // Wrapper to return { rows } like @vercel/postgres
 const sqlTagged = async (strings: TemplateStringsArray, ...values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> => {
@@ -43,10 +46,15 @@ const sqlTagged = async (strings: TemplateStringsArray, ...values: unknown[]): P
 }
 
 // For parameterized queries with dynamic SQL strings
+// Neon's sql function supports: sql('SELECT * FROM t WHERE id = $1', [1])
 const sqlQuery = async (query: string, params: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> => {
-  // Use neon's raw query support - cast to bypass TS template literal requirement
-  const rows = await (neonSql as unknown as (q: string, p: unknown[]) => Promise<Record<string, unknown>[]>)(query, params)
-  return { rows }
+  try {
+    const rows = await (neonSql as NeonSql)(query, params)
+    return { rows: rows as Record<string, unknown>[] }
+  } catch (error) {
+    console.error('SQL query error:', error, { query, params })
+    throw error
+  }
 }
 
 // Combined interface

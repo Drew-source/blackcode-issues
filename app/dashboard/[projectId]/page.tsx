@@ -17,10 +17,24 @@ export default async function ProjectPage({
 
   const { projectId: projectIdStr } = await params
   const projectId = parseInt(projectIdStr)
-  const [project, kanban] = await Promise.all([
-    getProject(projectId),
-    getKanbanView(projectId),
-  ])
+  
+  // Validate projectId
+  if (isNaN(projectId)) {
+    redirect('/dashboard')
+  }
+
+  let project
+  let kanban
+  
+  try {
+    [project, kanban] = await Promise.all([
+      getProject(projectId),
+      getKanbanView(projectId),
+    ])
+  } catch (error) {
+    console.error('Failed to load project:', error)
+    redirect('/dashboard')
+  }
 
   if (!project) {
     redirect('/dashboard')
