@@ -308,10 +308,30 @@ export async function deleteIssue(id: number) {
 // KANBAN VIEW
 // ============================================
 
+// Simple issues fetch using tagged template (avoids sql.query issues)
+export async function getIssuesByProject(projectId: number): Promise<Issue[]> {
+  const { rows } = await sql`
+    SELECT 
+      i.*,
+      u.name as assignee_name,
+      u.avatar_url as assignee_avatar,
+      m.name as milestone_name,
+      (SELECT COUNT(*)::int FROM comments c WHERE c.issue_id = i.id) as comment_count,
+      (SELECT COUNT(*)::int FROM attachments a WHERE a.issue_id = i.id) as attachment_count
+    FROM issues i
+    LEFT JOIN users u ON u.id = i.assignee_id
+    LEFT JOIN milestones m ON m.id = i.milestone_id
+    WHERE i.project_id = ${projectId}
+    ORDER BY i.priority ASC, i.updated_at DESC
+  `
+  return rows as unknown as Issue[]
+}
+
 export async function getKanbanView(projectId: number) {
-  const issues = await getIssues(projectId)
+  // Use the simpler tagged template version to avoid sql.query issues
+  const issues = await getIssuesByProject(projectId)
   
-  const kanban: Record<string, typeof issues> = {
+  const kanban: Record<string, Issue[]> = {
     backlog: [],
     todo: [],
     in_progress: [],
