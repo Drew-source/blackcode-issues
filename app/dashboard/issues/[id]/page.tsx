@@ -78,6 +78,8 @@ export default function IssueDetailPage() {
   const [editedStatus, setEditedStatus] = useState('')
   const [editedPriority, setEditedPriority] = useState<number>(3)
   const [editedAssigneeId, setEditedAssigneeId] = useState<number | null>(null)
+  const [editedStartDate, setEditedStartDate] = useState<string>('')
+  const [editedDueDate, setEditedDueDate] = useState<string>('')
   const [commentContent, setCommentContent] = useState('')
 
   const issueId = parseInt(params.id as string)
@@ -121,6 +123,8 @@ export default function IssueDetailPage() {
     setEditedStatus(issue.status)
     setEditedPriority(issue.priority)
     setEditedAssigneeId(issue.assignee_id || null)
+    setEditedStartDate((issue as any).start_date ? (issue as any).start_date.split('T')[0] : '')
+    setEditedDueDate((issue as any).due_date ? (issue as any).due_date.split('T')[0] : '')
   }
 
   const updateIssue = useMutation({
@@ -173,7 +177,9 @@ export default function IssueDetailPage() {
       status: editedStatus,
       priority: editedPriority,
       assignee_id: editedAssigneeId ?? undefined,
-    })
+      start_date: editedStartDate || null,
+      due_date: editedDueDate || null,
+    } as any)
   }
 
   if (isLoading) {
@@ -253,6 +259,8 @@ export default function IssueDetailPage() {
                       setEditedStatus(issue.status)
                       setEditedPriority(issue.priority)
                       setEditedAssigneeId(issue.assignee_id || null)
+                      setEditedStartDate((issue as any).start_date ? (issue as any).start_date.split('T')[0] : '')
+                      setEditedDueDate((issue as any).due_date ? (issue as any).due_date.split('T')[0] : '')
                     }}
                     className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
                   >
@@ -462,6 +470,48 @@ export default function IssueDetailPage() {
                 </div>
               ) : (
                 <span className="text-sm text-muted-foreground">Unassigned</span>
+              )}
+            </div>
+
+            {/* Start Date */}
+            <div className="bg-card rounded-lg border border-border p-4">
+              <label className="block text-xs font-medium text-muted-foreground mb-2">
+                Start Date
+              </label>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={editedStartDate}
+                  onChange={(e) => setEditedStartDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              ) : (issue as any).start_date ? (
+                <p className="text-sm">
+                  {new Date((issue as any).start_date).toLocaleDateString()}
+                </p>
+              ) : (
+                <span className="text-sm text-muted-foreground">Not set</span>
+              )}
+            </div>
+
+            {/* Due Date */}
+            <div className="bg-card rounded-lg border border-border p-4">
+              <label className="block text-xs font-medium text-muted-foreground mb-2">
+                Due Date
+              </label>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={editedDueDate}
+                  onChange={(e) => setEditedDueDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              ) : (issue as any).due_date ? (
+                <p className="text-sm">
+                  {new Date((issue as any).due_date).toLocaleDateString()}
+                </p>
+              ) : (
+                <span className="text-sm text-muted-foreground">Not set</span>
               )}
             </div>
 

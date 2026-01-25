@@ -28,7 +28,15 @@ export interface Issue {
   status: string
   priority: number
   assignee_id?: number
+  assignee_name?: string
+  assignee_avatar?: string
   milestone_id?: number
+  milestone_name?: string
+  start_date?: string
+  due_date?: string
+  estimated_hours?: number
+  comment_count?: number
+  attachment_count?: number
   created_at?: string
   updated_at?: string
 }
