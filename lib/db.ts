@@ -327,6 +327,26 @@ export async function getIssuesByProject(projectId: number): Promise<Issue[]> {
   return rows as unknown as Issue[]
 }
 
+// Get all issues with project info (for All Issues page)
+export async function getAllIssuesWithProjects(): Promise<Issue[]> {
+  const { rows } = await sql`
+    SELECT 
+      i.*,
+      u.name as assignee_name,
+      u.avatar_url as assignee_avatar,
+      m.name as milestone_name,
+      p.name as project_name,
+      (SELECT COUNT(*)::int FROM comments c WHERE c.issue_id = i.id) as comment_count,
+      (SELECT COUNT(*)::int FROM attachments a WHERE a.issue_id = i.id) as attachment_count
+    FROM issues i
+    LEFT JOIN users u ON u.id = i.assignee_id
+    LEFT JOIN milestones m ON m.id = i.milestone_id
+    LEFT JOIN projects p ON p.id = i.project_id
+    ORDER BY i.priority ASC, i.updated_at DESC
+  `
+  return rows as unknown as Issue[]
+}
+
 export async function getKanbanView(projectId: number) {
   // Use the simpler tagged template version to avoid sql.query issues
   const issues = await getIssuesByProject(projectId)

@@ -11,26 +11,26 @@ import {
   Paperclip,
   ArrowLeft,
   Search,
-  Filter,
   LayoutGrid,
   List,
+  User2,
 } from 'lucide-react'
 
 const PRIORITY_CONFIG = {
-  1: { label: 'Urgent', color: 'text-red-500', bg: 'bg-red-500/10' },
-  2: { label: 'High', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  3: { label: 'Medium', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  4: { label: 'Low', color: 'text-gray-500', bg: 'bg-gray-500/10' },
-  5: { label: 'None', color: 'text-gray-400', bg: 'bg-gray-400/10' },
+  1: { label: 'Urgent', color: 'text-red-500', bg: 'bg-red-500/10', dot: 'bg-red-500' },
+  2: { label: 'High', color: 'text-amber-500', bg: 'bg-amber-500/10', dot: 'bg-amber-500' },
+  3: { label: 'Medium', color: 'text-blue-500', bg: 'bg-blue-500/10', dot: 'bg-blue-500' },
+  4: { label: 'Low', color: 'text-gray-500', bg: 'bg-gray-500/10', dot: 'bg-gray-500' },
+  5: { label: 'None', color: 'text-gray-400', bg: 'bg-gray-400/10', dot: 'bg-gray-400' },
 } as const
 
-const STATUS_COLORS: Record<string, string> = {
-  backlog: 'bg-gray-500',
-  todo: 'bg-blue-500',
-  in_progress: 'bg-amber-500',
-  blocked: 'bg-red-500',
-  in_review: 'bg-purple-500',
-  done: 'bg-green-500',
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  backlog: { label: 'Backlog', color: 'text-gray-500', bg: 'bg-gray-500' },
+  todo: { label: 'To Do', color: 'text-blue-500', bg: 'bg-blue-500' },
+  in_progress: { label: 'In Progress', color: 'text-amber-500', bg: 'bg-amber-500' },
+  blocked: { label: 'Blocked', color: 'text-red-500', bg: 'bg-red-500' },
+  in_review: { label: 'In Review', color: 'text-purple-500', bg: 'bg-purple-500' },
+  done: { label: 'Done', color: 'text-green-500', bg: 'bg-green-500' },
 }
 
 interface Issue {
@@ -129,7 +129,7 @@ export function TimelineView({
               <div>
                 <h1 className="text-xl font-bold">{project.name}</h1>
                 <p className="text-sm text-muted-foreground">
-                  #{project.id} • Timeline view
+                  #{project.id} - Timeline view - {sortedIssues.length} issues
                 </p>
               </div>
             </div>
@@ -194,7 +194,7 @@ export function TimelineView({
 
       {/* Timeline */}
       <main className="p-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           {dayGroups.length === 0 ? (
             <div className="text-center py-24">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-secondary rounded-2xl mb-4">
@@ -207,10 +207,10 @@ export function TimelineView({
             </div>
           ) : (
             <div className="relative">
-              {/* Timeline line */}
-              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-border" />
+              {/* Center timeline line */}
+              <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/50 via-border to-border" />
 
-              <div className="space-y-8">
+              <div className="space-y-12">
                 {dayGroups.map((group, groupIndex) => {
                   const isToday = isSameDay(group.date, new Date())
                   const isYesterday = isSameDay(
@@ -224,80 +224,109 @@ export function TimelineView({
 
                   return (
                     <div key={format(group.date, 'yyyy-MM-dd')} className="relative">
-                      {/* Date header */}
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="w-16 h-16 bg-card border-2 border-border rounded-full flex items-center justify-center flex-shrink-0 relative z-10">
-                          <Calendar className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <h2 className="text-lg font-semibold">{dateLabel}</h2>
-                          <p className="text-sm text-muted-foreground">
+                      {/* Date marker - centered */}
+                      <div className="flex justify-center mb-8">
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: groupIndex * 0.1 }}
+                          className="relative z-10 flex items-center gap-3 px-4 py-2 bg-card border-2 border-primary/30 rounded-full shadow-lg"
+                        >
+                          <Calendar className="w-4 h-4 text-primary" />
+                          <span className="font-semibold text-sm">{dateLabel}</span>
+                          <span className="text-xs text-muted-foreground px-2 py-0.5 bg-secondary rounded-full">
                             {group.issues.length} issue{group.issues.length !== 1 ? 's' : ''}
-                          </p>
-                        </div>
+                          </span>
+                        </motion.div>
                       </div>
 
-                      {/* Issues */}
-                      <div className="ml-20 space-y-3">
+                      {/* Issues - staggered left and right */}
+                      <div className="space-y-6">
                         {group.issues.map((issue, issueIndex) => {
-                          const priority =
-                            PRIORITY_CONFIG[issue.priority as keyof typeof PRIORITY_CONFIG]
+                          const isLeft = issueIndex % 2 === 0
+                          const priority = PRIORITY_CONFIG[issue.priority as keyof typeof PRIORITY_CONFIG]
+                          const status = STATUS_CONFIG[issue.status] || STATUS_CONFIG.backlog
 
                           return (
                             <motion.div
                               key={issue.id}
-                              initial={{ opacity: 0, x: -20 }}
+                              initial={{ opacity: 0, x: isLeft ? -50 : 50 }}
                               animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: (groupIndex * 0.1) + (issueIndex * 0.05) }}
-                              className="relative"
+                              transition={{ delay: (groupIndex * 0.1) + (issueIndex * 0.08) }}
+                              className={`relative flex items-center ${isLeft ? 'justify-start' : 'justify-end'}`}
                             >
-                              {/* Timeline dot */}
-                              <div className="absolute -left-12 top-4 w-3 h-3 rounded-full bg-primary border-2 border-background" />
+                              {/* Connector line from center to card */}
+                              <div 
+                                className={`absolute top-1/2 h-0.5 bg-border ${
+                                  isLeft 
+                                    ? 'right-1/2 left-[calc(50%-12rem)] mr-2' 
+                                    : 'left-1/2 right-[calc(50%-12rem)] ml-2'
+                                }`}
+                              />
+                              
+                              {/* Center dot */}
+                              <div className={`absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full ${priority?.dot || 'bg-primary'} border-4 border-background shadow-md z-10`} />
 
                               {/* Issue card */}
-                              <Link href={`/dashboard/issues/${issue.id}`}>
-                                <div className="bg-card rounded-lg border border-border p-4 hover:border-primary/50 hover:shadow-md transition-all">
-                                  <div className="flex items-start justify-between gap-4 mb-2">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs font-mono text-muted-foreground">
-                                          #{issue.id}
+                              <Link 
+                                href={`/dashboard/issues/${issue.id}`}
+                                className={`w-[calc(50%-3rem)] ${isLeft ? 'mr-auto pr-8' : 'ml-auto pl-8'}`}
+                              >
+                                <div className="group bg-card rounded-xl border border-border p-4 hover:border-primary/50 hover:shadow-xl transition-all duration-200">
+                                  {/* Header row */}
+                                  <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-mono text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+                                        #{issue.id}
+                                      </span>
+                                      <span className={`text-xs px-2 py-0.5 rounded-full ${status.bg}/20 ${status.color}`}>
+                                        {status.label}
+                                      </span>
+                                      {priority && (
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${priority.bg} ${priority.color}`}>
+                                          {priority.label}
                                         </span>
-                                        <div
-                                          className={`w-2 h-2 rounded-full ${
-                                            STATUS_COLORS[issue.status] || 'bg-gray-500'
-                                          }`}
-                                        />
-                                        {priority && (
-                                          <span
-                                            className={`text-xs px-2 py-0.5 rounded-full ${priority.bg} ${priority.color}`}
-                                          >
-                                            {priority.label}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <h3 className="font-medium text-sm mb-1 line-clamp-1">
-                                        {issue.title}
-                                      </h3>
-                                      {issue.description && (
-                                        <p className="text-xs text-muted-foreground line-clamp-2">
-                                          {issue.description}
-                                        </p>
                                       )}
                                     </div>
-                                    {issue.assignee_avatar && (
+                                    
+                                    {/* Assignee */}
+                                    {issue.assignee_avatar ? (
                                       <Image
                                         src={issue.assignee_avatar}
                                         alt={issue.assignee_name || 'Assignee'}
-                                        width={32}
-                                        height={32}
-                                        className="rounded-full flex-shrink-0"
+                                        width={28}
+                                        height={28}
+                                        className="rounded-full ring-2 ring-background flex-shrink-0"
                                         title={issue.assignee_name}
                                       />
+                                    ) : issue.assignee_name ? (
+                                      <div 
+                                        className="w-7 h-7 bg-primary/20 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+                                        title={issue.assignee_name}
+                                      >
+                                        {issue.assignee_name.charAt(0)}
+                                      </div>
+                                    ) : (
+                                      <div className="w-7 h-7 bg-secondary rounded-full flex items-center justify-center flex-shrink-0">
+                                        <User2 size={14} className="text-muted-foreground" />
+                                      </div>
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  {/* Title */}
+                                  <h3 className="font-medium text-sm mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+                                    {issue.title}
+                                  </h3>
+
+                                  {/* Description */}
+                                  {issue.description && (
+                                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+                                      {issue.description}
+                                    </p>
+                                  )}
+
+                                  {/* Footer */}
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t border-border/50">
                                     {issue.comment_count > 0 && (
                                       <span className="flex items-center gap-1">
                                         <MessageSquare size={12} />
@@ -311,9 +340,7 @@ export function TimelineView({
                                       </span>
                                     )}
                                     <span className="ml-auto">
-                                      {sortBy === 'created_at'
-                                        ? `Created ${formatDistanceToNow(new Date(issue.created_at))} ago`
-                                        : `Updated ${formatDistanceToNow(new Date(issue.updated_at))} ago`}
+                                      {formatDistanceToNow(new Date(issue[sortBy]))} ago
                                     </span>
                                   </div>
                                 </div>
@@ -326,6 +353,11 @@ export function TimelineView({
                   )
                 })}
               </div>
+
+              {/* End marker */}
+              <div className="flex justify-center mt-12">
+                <div className="w-3 h-3 rounded-full bg-border" />
+              </div>
             </div>
           )}
         </div>
@@ -333,4 +365,3 @@ export function TimelineView({
     </div>
   )
 }
-

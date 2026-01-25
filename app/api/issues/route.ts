@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getIssues, createIssue } from '@/lib/db'
+import { getIssuesByProject, getAllIssuesWithProjects, createIssue } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,24 +12,19 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams
     const projectId = searchParams.get('project_id')
-    const status = searchParams.get('status')
-    const priority = searchParams.get('priority')
-    const assigneeId = searchParams.get('assignee_id')
-    const limit = searchParams.get('limit')
-    const offset = searchParams.get('offset')
     const includeProject = searchParams.get('includeProject') === 'true'
 
-    const issues = await getIssues(
-      projectId ? parseInt(projectId) : undefined,
-      {
-        status: status || undefined,
-        priority: priority ? parseInt(priority) : undefined,
-        assignee_id: assigneeId ? parseInt(assigneeId) : undefined,
-        limit: limit ? parseInt(limit) : undefined,
-        offset: offset ? parseInt(offset) : undefined,
-        includeProject,
-      }
-    )
+    // Use tagged template functions (Neon compatible)
+    let issues
+    if (projectId) {
+      issues = await getIssuesByProject(parseInt(projectId))
+    } else if (includeProject) {
+      // All Issues page - get all issues with project info
+      issues = await getAllIssuesWithProjects()
+    } else {
+      // Fallback: get all issues with project info
+      issues = await getAllIssuesWithProjects()
+    }
 
     return NextResponse.json(issues)
   } catch (error) {
