@@ -99,8 +99,18 @@ export function KanbanBoard({
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState<number | null>(null)
-  const [assigneeFilter, setAssigneeFilter] = useState<boolean | null>(null) // true = assigned, false = unassigned, null = all
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all') // 'all', 'unassigned', or specific user id
   const queryClient = useQueryClient()
+  
+  // Fetch project members for filter dropdown
+  const { data: members = [] } = useQuery({
+    queryKey: ['project-members', project.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${project.id}/members`)
+      if (!res.ok) return []
+      return res.json()
+    },
+  })
 
   // Fetch fresh data to keep kanban in sync
   useQuery({
@@ -244,18 +254,21 @@ export function KanbanBoard({
       }
       
       // Assignee filter
-      if (assigneeFilter === true && !issue.assignee_id) {
+      if (assigneeFilter === 'unassigned' && issue.assignee_id) {
         return false
       }
-      if (assigneeFilter === false && issue.assignee_id) {
-        return false
+      if (assigneeFilter !== 'all' && assigneeFilter !== 'unassigned') {
+        // Specific assignee selected
+        if (issue.assignee_id?.toString() !== assigneeFilter) {
+          return false
+        }
       }
       
       return true
     })
   }
   
-  const activeFiltersCount = (priorityFilter !== null ? 1 : 0) + (assigneeFilter !== null ? 1 : 0)
+  const activeFiltersCount = (priorityFilter !== null ? 1 : 0) + (assigneeFilter !== 'all' ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -345,7 +358,7 @@ export function KanbanBoard({
                         <button
                           onClick={() => {
                             setPriorityFilter(null)
-                            setAssigneeFilter(null)
+                            setAssigneeFilter('all')
                           }}
                           className="text-xs text-muted-foreground hover:text-foreground"
                         >
@@ -374,17 +387,17 @@ export function KanbanBoard({
                     <div>
                       <label className="block text-xs text-muted-foreground mb-1.5">Assignee</label>
                       <select
-                        value={assigneeFilter === null ? '' : assigneeFilter ? 'assigned' : 'unassigned'}
-                        onChange={(e) => {
-                          if (e.target.value === '') setAssigneeFilter(null)
-                          else if (e.target.value === 'assigned') setAssigneeFilter(true)
-                          else setAssigneeFilter(false)
-                        }}
+                        value={assigneeFilter}
+                        onChange={(e) => setAssigneeFilter(e.target.value)}
                         className="w-full px-2 py-1.5 bg-background border border-input rounded-md text-sm"
                       >
-                        <option value="">All</option>
-                        <option value="assigned">Assigned</option>
+                        <option value="all">All</option>
                         <option value="unassigned">Unassigned</option>
+                        {members.map((m: any) => (
+                          <option key={m.user_id} value={m.user_id.toString()}>
+                            {m.name || m.email}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

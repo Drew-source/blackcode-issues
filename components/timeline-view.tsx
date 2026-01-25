@@ -88,16 +88,21 @@ export function TimelineView({
     return true
   })
 
-  // Sort issues
+  // Sort issues (with null safety)
   const sortedIssues = [...filteredIssues].sort((a, b) => {
-    const aDate = new Date(a[sortBy])
-    const bDate = new Date(b[sortBy])
+    const aDateStr = a[sortBy] || a.created_at || ''
+    const bDateStr = b[sortBy] || b.created_at || ''
+    const aDate = aDateStr ? new Date(aDateStr) : new Date(0)
+    const bDate = bDateStr ? new Date(bDateStr) : new Date(0)
     return bDate.getTime() - aDate.getTime() // Most recent first
   })
 
-  // Group issues by day
+  // Group issues by day (with null safety)
   const issuesByDay = sortedIssues.reduce((acc, issue) => {
-    const date = startOfDay(new Date(issue[sortBy]))
+    const dateStr = issue[sortBy] || issue.created_at
+    if (!dateStr) return acc // Skip issues without dates
+    
+    const date = startOfDay(new Date(dateStr))
     const dateKey = format(date, 'yyyy-MM-dd')
     if (!acc[dateKey]) {
       acc[dateKey] = {
@@ -340,7 +345,7 @@ export function TimelineView({
                                       </span>
                                     )}
                                     <span className="ml-auto">
-                                      {formatDistanceToNow(new Date(issue[sortBy]))} ago
+                                      {(issue[sortBy] || issue.created_at) && formatDistanceToNow(new Date(issue[sortBy] || issue.created_at))} ago
                                     </span>
                                   </div>
                                 </div>
