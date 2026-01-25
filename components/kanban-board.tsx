@@ -97,6 +97,9 @@ export function KanbanBoard({
   const [searchQuery, setSearchQuery] = useState('')
   const [showNewIssue, setShowNewIssue] = useState<string | null>(null)
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [priorityFilter, setPriorityFilter] = useState<number | null>(null)
+  const [assigneeFilter, setAssigneeFilter] = useState<boolean | null>(null) // true = assigned, false = unassigned, null = all
   const queryClient = useQueryClient()
 
   // Fetch fresh data to keep kanban in sync
@@ -132,13 +135,23 @@ export function KanbanBoard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       })
-      if (!res.ok) throw new Error('Failed to update issue')
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        console.error('Update failed:', errorData)
+        throw new Error('Failed to update issue')
+      }
       return res.json()
     },
-    onError: () => {
+    onSuccess: () => {
+      // Invalidate caches to ensure persistence
+      queryClient.invalidateQueries({ queryKey: ['all-issues'] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: (error) => {
+      console.error('Mutation error:', error)
       toast.error('Failed to update issue')
-      // Revert optimistic update
-      queryClient.invalidateQueries({ queryKey: ['kanban', project.id] })
+      // Revert optimistic update by refetching
+      queryClient.invalidateQueries({ queryKey: ['project-issues', project.id] })
     },
   })
 
@@ -214,16 +227,35 @@ export function KanbanBoard({
     }
   }, [updateIssueStatus])
 
-  // Filter issues by search query
+  // Filter issues by search query, priority, and assignee
   const filterIssues = (issues: Issue[]) => {
-    if (!searchQuery) return issues
-    const query = searchQuery.toLowerCase()
-    return issues.filter(
-      (issue) =>
-        issue.title.toLowerCase().includes(query) ||
-        issue.id.toString().includes(query)
-    )
+    return issues.filter((issue) => {
+      // Search query filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        if (!issue.title.toLowerCase().includes(query) && !issue.id.toString().includes(query)) {
+          return false
+        }
+      }
+      
+      // Priority filter
+      if (priorityFilter !== null && issue.priority !== priorityFilter) {
+        return false
+      }
+      
+      // Assignee filter
+      if (assigneeFilter === true && !issue.assignee_id) {
+        return false
+      }
+      if (assigneeFilter === false && issue.assignee_id) {
+        return false
+      }
+      
+      return true
+    })
   }
+  
+  const activeFiltersCount = (priorityFilter !== null ? 1 : 0) + (assigneeFilter !== null ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -291,10 +323,73 @@ export function KanbanBoard({
               </div>
 
               {/* Filters */}
-              <button className="flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors">
-                <Filter size={16} />
-                Filters
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors ${activeFiltersCount > 0 ? 'border-primary' : ''}`}
+                >
+                  <Filter size={16} />
+                  Filters
+                  {activeFiltersCount > 0 && (
+                    <span className="px-1.5 py-0.5 bg-primary text-primary-foreground text-xs rounded-full">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
+                
+                {showFilters && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-card border border-border rounded-lg shadow-lg p-4 z-30">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-medium text-sm">Filters</span>
+                      {activeFiltersCount > 0 && (
+                        <button
+                          onClick={() => {
+                            setPriorityFilter(null)
+                            setAssigneeFilter(null)
+                          }}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Clear all
+                        </button>
+                      )}
+                    </div>
+                    
+                    {/* Priority filter */}
+                    <div className="mb-3">
+                      <label className="block text-xs text-muted-foreground mb-1.5">Priority</label>
+                      <select
+                        value={priorityFilter ?? ''}
+                        onChange={(e) => setPriorityFilter(e.target.value ? parseInt(e.target.value) : null)}
+                        className="w-full px-2 py-1.5 bg-background border border-input rounded-md text-sm"
+                      >
+                        <option value="">All priorities</option>
+                        <option value="1">Urgent</option>
+                        <option value="2">High</option>
+                        <option value="3">Medium</option>
+                        <option value="4">Low</option>
+                      </select>
+                    </div>
+                    
+                    {/* Assignee filter */}
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1.5">Assignee</label>
+                      <select
+                        value={assigneeFilter === null ? '' : assigneeFilter ? 'assigned' : 'unassigned'}
+                        onChange={(e) => {
+                          if (e.target.value === '') setAssigneeFilter(null)
+                          else if (e.target.value === 'assigned') setAssigneeFilter(true)
+                          else setAssigneeFilter(false)
+                        }}
+                        className="w-full px-2 py-1.5 bg-background border border-input rounded-md text-sm"
+                      >
+                        <option value="">All</option>
+                        <option value="assigned">Assigned</option>
+                        <option value="unassigned">Unassigned</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Rollback */}
               <button className="flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors text-muted-foreground">

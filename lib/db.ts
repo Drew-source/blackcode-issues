@@ -254,49 +254,38 @@ export async function updateIssue(id: number, data: Partial<{
   priority: number
   assignee_id: number | null
   milestone_id: number | null
+  start_date: string | null
+  due_date: string | null
 }>) {
-  const updates: string[] = []
-  const values: any[] = []
-  let idx = 1
+  // Get current issue first
+  const current = await getIssue(id)
+  if (!current) return null
 
-  if (data.title !== undefined) {
-    updates.push(`title = $${idx++}`)
-    values.push(data.title)
-  }
-  if (data.description !== undefined) {
-    updates.push(`description = $${idx++}`)
-    values.push(data.description)
-  }
-  if (data.status !== undefined) {
-    updates.push(`status = $${idx++}`)
-    values.push(data.status)
-  }
-  if (data.priority !== undefined) {
-    updates.push(`priority = $${idx++}`)
-    values.push(data.priority)
-  }
-  if (data.assignee_id !== undefined) {
-    updates.push(`assignee_id = $${idx++}`)
-    values.push(data.assignee_id)
-  }
-  if (data.milestone_id !== undefined) {
-    updates.push(`milestone_id = $${idx++}`)
-    values.push(data.milestone_id)
-  }
+  // Merge with updates
+  const title = data.title !== undefined ? data.title : current.title
+  const description = data.description !== undefined ? data.description : current.description
+  const status = data.status !== undefined ? data.status : current.status
+  const priority = data.priority !== undefined ? data.priority : current.priority
+  const assignee_id = data.assignee_id !== undefined ? data.assignee_id : current.assignee_id
+  const milestone_id = data.milestone_id !== undefined ? data.milestone_id : current.milestone_id
+  const start_date = data.start_date !== undefined ? data.start_date : (current as any).start_date
+  const due_date = data.due_date !== undefined ? data.due_date : (current as any).due_date
 
-  if (updates.length === 0) return null
-
-  updates.push('updated_at = NOW()')
-  values.push(id)
-
-  const query = `
+  const { rows } = await sql`
     UPDATE issues 
-    SET ${updates.join(', ')} 
-    WHERE id = $${idx}
+    SET 
+      title = ${title},
+      description = ${description},
+      status = ${status},
+      priority = ${priority},
+      assignee_id = ${assignee_id},
+      milestone_id = ${milestone_id},
+      start_date = ${start_date},
+      due_date = ${due_date},
+      updated_at = NOW()
+    WHERE id = ${id}
     RETURNING *
   `
-  
-  const { rows } = await sql.query(query, values)
   return (rows[0] as unknown as Issue) || null
 }
 
