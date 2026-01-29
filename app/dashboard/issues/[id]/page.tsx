@@ -1,27 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter, useParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
   Edit2,
   Save,
-  X,
   MessageSquare,
   Paperclip,
-  User2,
   Calendar,
-  Tag,
-  CheckCircle2,
-  Clock,
+  Upload,
+  FileText,
+  ImageIcon,
   Trash2,
+  ExternalLink,
+  History,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
+import { RichTextEditor, RichTextDisplay } from '@/components/rich-text-editor'
 
 const STATUSES = [
   { id: 'backlog', label: 'Backlog' },
@@ -55,6 +57,8 @@ interface Issue {
   milestone_name?: string
   comment_count: number
   attachment_count: number
+  start_date?: string
+  due_date?: string
   created_at: string
   updated_at: string
 }
@@ -68,8 +72,76 @@ interface Comment {
   created_at: string
 }
 
+interface Attachment {
+  id: number
+  filename: string
+  file_url: string
+  file_size?: number
+  mime_type?: string
+  uploader_name?: string
+  uploader_avatar?: string
+  created_at: string
+}
+
+interface ActivityItem {
+  id: number
+  type: 'comment' | 'change'
+  content?: string
+  operation_type?: string
+  old_data?: any
+  new_data?: any
+  user_id: number
+  user_name?: string
+  user_avatar?: string
+  created_at: string
+}
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes) return 'Unknown size'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getFileIcon(mimeType?: string) {
+  if (mimeType?.startsWith('image/')) return ImageIcon
+  return FileText
+}
+
+function getChangeSummary(item: ActivityItem): string {
+  if (!item.old_data || !item.new_data) {
+    if (item.operation_type === 'INSERT') return 'created this issue'
+    if (item.operation_type === 'DELETE') return 'deleted this issue'
+    return 'made changes'
+  }
+
+  const changes: string[] = []
+  const old = item.old_data
+  const newData = item.new_data
+
+  if (old.status !== newData.status) {
+    changes.push(`status from "${old.status}" to "${newData.status}"`)
+  }
+  if (old.priority !== newData.priority) {
+    const oldP = PRIORITY_CONFIG[old.priority as keyof typeof PRIORITY_CONFIG]?.label || old.priority
+    const newP = PRIORITY_CONFIG[newData.priority as keyof typeof PRIORITY_CONFIG]?.label || newData.priority
+    changes.push(`priority from "${oldP}" to "${newP}"`)
+  }
+  if (old.title !== newData.title) {
+    changes.push('title')
+  }
+  if (old.description !== newData.description) {
+    changes.push('description')
+  }
+  if (old.assignee_id !== newData.assignee_id) {
+    changes.push('assignee')
+  }
+
+  if (changes.length === 0) return 'made changes'
+  return `changed ${changes.join(', ')}`
+}
+
 export default function IssueDetailPage() {
-  const router = useRouter()
   const params = useParams()
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
@@ -81,6 +153,8 @@ export default function IssueDetailPage() {
   const [editedStartDate, setEditedStartDate] = useState<string>('')
   const [editedDueDate, setEditedDueDate] = useState<string>('')
   const [commentContent, setCommentContent] = useState('')
+  const [showActivity, setShowActivity] = useState(true)
+  const [isUploading, setIsUploading] = useState(false)
 
   const issueId = parseInt(params.id as string)
 
@@ -99,6 +173,26 @@ export default function IssueDetailPage() {
     queryKey: ['comments', issueId],
     queryFn: async () => {
       const res = await fetch(`/api/issues/${issueId}/comments`)
+      if (!res.ok) return []
+      return res.json()
+    },
+  })
+
+  // Fetch attachments
+  const { data: attachments = [], refetch: refetchAttachments } = useQuery<Attachment[]>({
+    queryKey: ['attachments', issueId],
+    queryFn: async () => {
+      const res = await fetch(`/api/issues/${issueId}/attachments`)
+      if (!res.ok) return []
+      return res.json()
+    },
+  })
+
+  // Fetch activity
+  const { data: activity = [] } = useQuery<ActivityItem[]>({
+    queryKey: ['activity', issueId],
+    queryFn: async () => {
+      const res = await fetch(`/api/issues/${issueId}/activity`)
       if (!res.ok) return []
       return res.json()
     },
@@ -123,8 +217,8 @@ export default function IssueDetailPage() {
     setEditedStatus(issue.status)
     setEditedPriority(issue.priority)
     setEditedAssigneeId(issue.assignee_id || null)
-    setEditedStartDate((issue as any).start_date ? (issue as any).start_date.split('T')[0] : '')
-    setEditedDueDate((issue as any).due_date ? (issue as any).due_date.split('T')[0] : '')
+    setEditedStartDate(issue.start_date ? issue.start_date.split('T')[0] : '')
+    setEditedDueDate(issue.due_date ? issue.due_date.split('T')[0] : '')
   }
 
   const updateIssue = useMutation({
@@ -140,6 +234,7 @@ export default function IssueDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
       queryClient.invalidateQueries({ queryKey: ['all-issues'] })
+      queryClient.invalidateQueries({ queryKey: ['activity', issueId] })
       queryClient.invalidateQueries({ queryKey: ['kanban', issue?.project_id] })
       setIsEditing(false)
       toast.success('Issue updated!')
@@ -162,6 +257,7 @@ export default function IssueDetailPage() {
     onSuccess: () => {
       refetchComments()
       queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
+      queryClient.invalidateQueries({ queryKey: ['activity', issueId] })
       setCommentContent('')
       toast.success('Comment added!')
     },
@@ -169,6 +265,94 @@ export default function IssueDetailPage() {
       toast.error('Failed to create comment')
     },
   })
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: async (attachmentId: number) => {
+      const res = await fetch(`/api/issues/${issueId}/attachments?attachmentId=${attachmentId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Failed to delete attachment')
+      return res.json()
+    },
+    onSuccess: () => {
+      refetchAttachments()
+      queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
+      toast.success('Attachment deleted!')
+    },
+    onError: () => {
+      toast.error('Failed to delete attachment')
+    },
+  })
+
+  // Image upload handler for rich text editor
+  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!res.ok) {
+      throw new Error('Failed to upload image')
+    }
+
+    const data = await res.json()
+    return data.url
+  }, [])
+
+  // File upload handler for attachments
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    try {
+      // Upload file
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!uploadRes.ok) {
+        const error = await uploadRes.json()
+        throw new Error(error.error || 'Failed to upload file')
+      }
+
+      const uploadData = await uploadRes.json()
+
+      // Create attachment record
+      const attachRes = await fetch(`/api/issues/${issueId}/attachments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: uploadData.filename,
+          file_url: uploadData.url,
+          file_size: uploadData.size,
+          mime_type: uploadData.contentType,
+        }),
+      })
+
+      if (!attachRes.ok) {
+        throw new Error('Failed to create attachment record')
+      }
+
+      refetchAttachments()
+      queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
+      toast.success('File uploaded!')
+    } catch (error) {
+      console.error('Upload failed:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to upload file')
+    } finally {
+      setIsUploading(false)
+      // Reset input
+      event.target.value = ''
+    }
+  }, [issueId, refetchAttachments, queryClient])
 
   const handleSave = () => {
     updateIssue.mutate({
@@ -185,7 +369,7 @@ export default function IssueDetailPage() {
   if (isLoading) {
     return (
       <div className="p-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="h-8 bg-card rounded-lg animate-pulse mb-4" />
           <div className="h-64 bg-card rounded-lg animate-pulse" />
         </div>
@@ -196,7 +380,7 @@ export default function IssueDetailPage() {
   if (!issue) {
     return (
       <div className="p-8">
-        <div className="max-w-4xl mx-auto text-center py-24">
+        <div className="max-w-5xl mx-auto text-center py-24">
           <h2 className="text-xl font-semibold mb-2">Issue not found</h2>
           <Link href="/dashboard/issues" className="text-primary hover:underline">
             Back to all issues
@@ -243,7 +427,7 @@ export default function IssueDetailPage() {
                   >
                     {issue.project_name || `Project #${issue.project_id}`}
                   </Link>
-                  {' • '}
+                  {' - '}
                   Created {formatDistanceToNow(new Date(issue.created_at))} ago
                 </p>
               </div>
@@ -259,8 +443,8 @@ export default function IssueDetailPage() {
                       setEditedStatus(issue.status)
                       setEditedPriority(issue.priority)
                       setEditedAssigneeId(issue.assignee_id || null)
-                      setEditedStartDate((issue as any).start_date ? (issue as any).start_date.split('T')[0] : '')
-                      setEditedDueDate((issue as any).due_date ? (issue as any).due_date.split('T')[0] : '')
+                      setEditedStartDate(issue.start_date ? issue.start_date.split('T')[0] : '')
+                      setEditedDueDate(issue.due_date ? issue.due_date.split('T')[0] : '')
                     }}
                     className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
                   >
@@ -291,74 +475,183 @@ export default function IssueDetailPage() {
 
       {/* Content */}
       <main className="p-6">
-        <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-6">
+        <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-6">
           {/* Main content */}
           <div className="md:col-span-2 space-y-6">
             {/* Description */}
             <div className="bg-card rounded-lg border border-border p-6">
               <h2 className="text-sm font-semibold mb-3">Description</h2>
               {isEditing ? (
-                <textarea
-                  value={editedDescription}
-                  onChange={(e) => setEditedDescription(e.target.value)}
+                <RichTextEditor
+                  content={editedDescription}
+                  onChange={setEditedDescription}
                   placeholder="Add a description..."
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  rows={6}
+                  onImageUpload={handleImageUpload}
                 />
+              ) : issue.description ? (
+                <RichTextDisplay content={issue.description} />
               ) : (
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {issue.description || 'No description provided.'}
-                </p>
+                <p className="text-sm text-muted-foreground">No description provided.</p>
               )}
             </div>
 
-            {/* Comments */}
+            {/* Attachments */}
             <div className="bg-card rounded-lg border border-border p-6">
-              <h2 className="text-sm font-semibold mb-4">
-                Comments ({comments.length})
-              </h2>
-
-              <div className="space-y-4 mb-6">
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    {comment.author_avatar ? (
-                      <Image
-                        src={comment.author_avatar}
-                        alt={comment.author_name || 'User'}
-                        width={32}
-                        height={32}
-                        className="rounded-full flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
-                        {comment.author_name?.charAt(0) || 'U'}
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium">
-                          {comment.author_name || 'Unknown'}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(comment.created_at))} ago
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground whitespace-pre-wrap">
-                        {comment.content}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Paperclip size={16} />
+                  Attachments ({attachments.length})
+                </h2>
+                <label className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 cursor-pointer">
+                  <Upload size={16} />
+                  {isUploading ? 'Uploading...' : 'Upload'}
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                    className="hidden"
+                    accept="image/*,application/pdf,text/plain,application/json,text/markdown"
+                  />
+                </label>
               </div>
 
-              {/* Add comment */}
-              <div className="space-y-2">
-                <textarea
-                  value={commentContent}
-                  onChange={(e) => setCommentContent(e.target.value)}
-                  placeholder="Add a comment..."
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  rows={3}
+              {attachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No attachments yet. Upload files to share with your team.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {attachments.map((attachment) => {
+                    const FileIcon = getFileIcon(attachment.mime_type)
+                    const isImage = attachment.mime_type?.startsWith('image/')
+
+                    return (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg group"
+                      >
+                        {isImage ? (
+                          <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0">
+                            <img
+                              src={attachment.file_url}
+                              alt={attachment.filename}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 bg-primary/10 rounded flex items-center justify-center flex-shrink-0">
+                            <FileIcon size={20} className="text-primary" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{attachment.filename}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(attachment.file_size)}
+                            {attachment.uploader_name && ` - ${attachment.uploader_name}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <a
+                            href={attachment.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 hover:bg-secondary rounded transition-colors"
+                            title="Open in new tab"
+                          >
+                            <ExternalLink size={16} />
+                          </a>
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this attachment?')) {
+                                deleteAttachmentMutation.mutate(attachment.id)
+                              }
+                            }}
+                            className="p-1.5 hover:bg-red-500/10 text-red-500 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Activity History */}
+            <div className="bg-card rounded-lg border border-border p-6">
+              <button
+                onClick={() => setShowActivity(!showActivity)}
+                className="flex items-center justify-between w-full text-sm font-semibold mb-4"
+              >
+                <span className="flex items-center gap-2">
+                  <History size={16} />
+                  Activity History ({activity.length})
+                </span>
+                {showActivity ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </button>
+
+              {showActivity && (
+                <div className="space-y-4">
+                  {activity.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No activity yet.
+                    </p>
+                  ) : (
+                    activity.map((item) => (
+                      <div key={`${item.type}-${item.id}`} className="flex gap-3">
+                        {item.user_avatar ? (
+                          <Image
+                            src={item.user_avatar}
+                            alt={item.user_name || 'User'}
+                            width={32}
+                            height={32}
+                            className="rounded-full flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0">
+                            {item.user_name?.charAt(0) || 'U'}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-sm font-medium">
+                              {item.user_name || 'Unknown'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(item.created_at))} ago
+                            </span>
+                          </div>
+                          {item.type === 'comment' ? (
+                            <div className="text-sm bg-secondary/50 rounded-lg p-3">
+                              <RichTextDisplay content={item.content || ''} />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              {getChangeSummary(item)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Add Comment */}
+            <div className="bg-card rounded-lg border border-border p-6">
+              <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <MessageSquare size={16} />
+                Add Comment
+              </h2>
+              <div className="space-y-3">
+                <RichTextEditor
+                  content={commentContent}
+                  onChange={setCommentContent}
+                  placeholder="Write a comment..."
+                  onImageUpload={handleImageUpload}
                 />
                 <div className="flex justify-end">
                   <button
@@ -476,6 +769,7 @@ export default function IssueDetailPage() {
             {/* Start Date */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
+                <Calendar size={12} className="inline mr-1" />
                 Start Date
               </label>
               {isEditing ? (
@@ -485,9 +779,9 @@ export default function IssueDetailPage() {
                   onChange={(e) => setEditedStartDate(e.target.value)}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-              ) : (issue as any).start_date ? (
+              ) : issue.start_date ? (
                 <p className="text-sm">
-                  {new Date((issue as any).start_date).toLocaleDateString()}
+                  {new Date(issue.start_date).toLocaleDateString()}
                 </p>
               ) : (
                 <span className="text-sm text-muted-foreground">Not set</span>
@@ -497,6 +791,7 @@ export default function IssueDetailPage() {
             {/* Due Date */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
+                <Calendar size={12} className="inline mr-1" />
                 Due Date
               </label>
               {isEditing ? (
@@ -506,9 +801,9 @@ export default function IssueDetailPage() {
                   onChange={(e) => setEditedDueDate(e.target.value)}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-              ) : (issue as any).due_date ? (
+              ) : issue.due_date ? (
                 <p className="text-sm">
-                  {new Date((issue as any).due_date).toLocaleDateString()}
+                  {new Date(issue.due_date).toLocaleDateString()}
                 </p>
               ) : (
                 <span className="text-sm text-muted-foreground">Not set</span>
@@ -525,7 +820,7 @@ export default function IssueDetailPage() {
               </div>
             )}
 
-            {/* Dates */}
+            {/* Metadata */}
             <div className="bg-card rounded-lg border border-border p-4 space-y-2">
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -550,4 +845,3 @@ export default function IssueDetailPage() {
     </div>
   )
 }
-

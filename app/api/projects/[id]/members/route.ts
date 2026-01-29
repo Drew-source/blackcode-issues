@@ -151,6 +151,15 @@ export async function DELETE(
       )
     }
 
+    // Prevent removing owners (only owners can remove other owners)
+    const targetUserRole = await getProjectMemberRole(projectId, user_id)
+    if (targetUserRole === 'owner' && currentUserRole !== 'owner') {
+      return NextResponse.json(
+        { error: 'Forbidden', suggestion: 'Only project owners can remove other owners' },
+        { status: 403 }
+      )
+    }
+
     await removeProjectMember(projectId, user_id)
     return NextResponse.json({ success: true })
   } catch (error) {

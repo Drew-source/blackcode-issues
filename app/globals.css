@@ -150,3 +150,89 @@ body {
   background-color: hsl(var(--card) / 0.8);
 }
 
+/* Prose / Rich text styles */
+.prose {
+  @apply text-foreground;
+  line-height: 1.7;
+}
+
+.prose h1 {
+  @apply text-2xl font-bold mb-4 mt-6;
+}
+
+.prose h2 {
+  @apply text-xl font-semibold mb-3 mt-5;
+}
+
+.prose h3 {
+  @apply text-lg font-semibold mb-2 mt-4;
+}
+
+.prose p {
+  @apply mb-3;
+}
+
+.prose ul {
+  @apply list-disc pl-6 mb-3;
+}
+
+.prose ol {
+  @apply list-decimal pl-6 mb-3;
+}
+
+.prose li {
+  @apply mb-1;
+}
+
+.prose blockquote {
+  @apply border-l-4 pl-4 italic my-4;
+  border-color: hsl(var(--primary) / 0.5);
+  color: hsl(var(--muted-foreground));
+}
+
+.prose code {
+  @apply bg-secondary px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.prose pre {
+  @apply bg-secondary p-4 rounded-lg overflow-x-auto my-4;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose a {
+  @apply text-primary underline hover:no-underline;
+}
+
+.prose img {
+  @apply max-w-full rounded-lg my-4;
+}
+
+.prose hr {
+  @apply border-border my-6;
+}
+
+.prose strong {
+  @apply font-semibold;
+}
+
+.prose em {
+  @apply italic;
+}
+
+.prose s {
+  @apply line-through;
+}
+
+/* TipTap specific styles */
+.ProseMirror {
+  @apply focus:outline-none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  @apply text-muted-foreground pointer-events-none float-left h-0;
+  content: attr(data-placeholder);
+}
+

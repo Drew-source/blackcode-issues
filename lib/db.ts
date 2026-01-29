@@ -350,6 +350,42 @@ export async function getMilestone(id: number) {
   return rows[0] || null
 }
 
+export async function getMilestoneWithDetails(id: number) {
+  const { rows } = await sql`
+    SELECT
+      m.*,
+      p.name as project_name,
+      COUNT(i.id)::int as issue_count,
+      COUNT(i.id) FILTER (WHERE i.status = 'done')::int as completed_issues
+    FROM milestones m
+    LEFT JOIN projects p ON p.id = m.project_id
+    LEFT JOIN issues i ON i.milestone_id = m.id
+    WHERE m.id = ${id}
+    GROUP BY m.id, p.name
+  `
+  return rows[0] || null
+}
+
+export async function getIssuesByMilestone(milestoneId: number): Promise<Issue[]> {
+  const { rows } = await sql`
+    SELECT
+      i.*,
+      u.name as assignee_name,
+      u.avatar_url as assignee_avatar,
+      m.name as milestone_name,
+      p.name as project_name,
+      (SELECT COUNT(*)::int FROM comments c WHERE c.issue_id = i.id) as comment_count,
+      (SELECT COUNT(*)::int FROM attachments a WHERE a.issue_id = i.id) as attachment_count
+    FROM issues i
+    LEFT JOIN users u ON u.id = i.assignee_id
+    LEFT JOIN milestones m ON m.id = i.milestone_id
+    LEFT JOIN projects p ON p.id = i.project_id
+    WHERE i.milestone_id = ${milestoneId}
+    ORDER BY i.priority ASC, i.updated_at DESC
+  `
+  return rows as unknown as Issue[]
+}
+
 export async function createMilestone(data: {
   project_id: number
   name: string
@@ -651,5 +687,118 @@ export async function getAnalytics() {
     topAssignees,
     issuesOverTime,
   }
+}
+
+// ============================================
+// ATTACHMENTS
+// ============================================
+
+export interface Attachment {
+  id: number
+  issue_id: number
+  filename: string
+  file_url: string
+  file_size?: number
+  mime_type?: string
+  uploaded_by?: number
+  uploader_name?: string
+  uploader_avatar?: string
+  created_at?: string
+}
+
+export async function getAttachments(issueId: number): Promise<Attachment[]> {
+  const { rows } = await sql`
+    SELECT
+      a.*,
+      u.name as uploader_name,
+      u.avatar_url as uploader_avatar
+    FROM attachments a
+    LEFT JOIN users u ON u.id = a.uploaded_by
+    WHERE a.issue_id = ${issueId}
+    ORDER BY a.created_at DESC
+  `
+  return rows as unknown as Attachment[]
+}
+
+export async function createAttachment(data: {
+  issue_id: number
+  filename: string
+  file_url: string
+  file_size?: number
+  mime_type?: string
+  uploaded_by?: number
+}): Promise<Attachment | null> {
+  const { rows } = await sql`
+    INSERT INTO attachments (issue_id, filename, file_url, file_size, mime_type, uploaded_by)
+    VALUES (
+      ${data.issue_id},
+      ${data.filename},
+      ${data.file_url},
+      ${data.file_size || null},
+      ${data.mime_type || null},
+      ${data.uploaded_by || null}
+    )
+    RETURNING *
+  `
+  return (rows[0] as unknown as Attachment) || null
+}
+
+export async function deleteAttachment(id: number): Promise<void> {
+  await sql`DELETE FROM attachments WHERE id = ${id}`
+}
+
+export async function getAttachment(id: number): Promise<Attachment | null> {
+  const { rows } = await sql`
+    SELECT * FROM attachments WHERE id = ${id}
+  `
+  return (rows[0] as unknown as Attachment) || null
+}
+
+// ============================================
+// ACTIVITY HISTORY
+// ============================================
+
+export async function getIssueActivity(issueId: number) {
+  // Get comments
+  const { rows: comments } = await sql`
+    SELECT
+      c.id,
+      'comment' as type,
+      c.content,
+      c.user_id,
+      u.name as user_name,
+      u.avatar_url as user_avatar,
+      c.created_at
+    FROM comments c
+    LEFT JOIN users u ON u.id = c.user_id
+    WHERE c.issue_id = ${issueId}
+    ORDER BY c.created_at DESC
+  `
+
+  // Get changes from transaction log
+  const { rows: changes } = await sql`
+    SELECT
+      t.id,
+      'change' as type,
+      t.operation_type,
+      t.old_data,
+      t.new_data,
+      t.user_id,
+      u.name as user_name,
+      u.avatar_url as user_avatar,
+      t.created_at
+    FROM transaction_log t
+    LEFT JOIN users u ON u.id = t.user_id
+    WHERE t.table_name = 'issues' AND t.record_id = ${issueId}
+    ORDER BY t.created_at DESC
+    LIMIT 50
+  `
+
+  // Combine and sort by date
+  const activity = [...comments, ...changes].sort(
+    (a, b) => new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime()
+  )
+
+  return activity
 }
 

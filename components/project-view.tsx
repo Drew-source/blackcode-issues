@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { KanbanBoard } from './kanban-board'
-import { TimelineView } from './timeline-view'
+import { GanttView } from './gantt-view'
 
 interface Project {
   id: number
@@ -12,6 +12,7 @@ interface Project {
 }
 
 interface User {
+  id?: number
   name?: string | null
   email?: string | null
   image?: string | null
@@ -36,8 +37,8 @@ export function ProjectView({
     return Object.values(initialKanban).flat()
   })
 
-  // Fetch all issues for timeline view
-  const { data: timelineIssues = allIssues } = useQuery({
+  // Fetch all issues for Gantt view
+  const { data: ganttIssues = allIssues } = useQuery({
     queryKey: ['project-issues', project.id],
     queryFn: async () => {
       const res = await fetch(`/api/issues?project_id=${project.id}&includeProject=true`)
@@ -50,7 +51,7 @@ export function ProjectView({
 
   return (
     <>
-      {/* View Toggle - will be rendered in KanbanBoard/TimelineView header */}
+      {/* View Toggle - will be rendered in KanbanBoard/GanttView header */}
       {view === 'kanban' ? (
         <KanbanBoard
           project={project}
@@ -60,9 +61,9 @@ export function ProjectView({
           onViewChange={setView}
         />
       ) : (
-        <TimelineView
+        <GanttView
           project={project}
-          issues={timelineIssues}
+          issues={ganttIssues}
           user={user}
           view={view}
           onViewChange={setView}

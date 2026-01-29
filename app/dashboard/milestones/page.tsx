@@ -210,26 +210,33 @@ export default function MilestonesPage() {
                         key={milestone.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="bg-card rounded-lg border border-border p-5 hover:border-primary/50 transition-all"
+                        className="bg-card rounded-lg border border-border p-5 hover:border-primary/50 transition-all group"
                       >
                         <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
+                          <Link
+                            href={`/dashboard/milestones/${milestone.id}`}
+                            className="flex-1 hover:text-primary transition-colors"
+                          >
                             <h3 className="font-semibold mb-1">{milestone.name}</h3>
                             {milestone.description && (
                               <p className="text-sm text-muted-foreground line-clamp-2">
                                 {milestone.description}
                               </p>
                             )}
-                          </div>
-                          <div className="flex items-center gap-1">
+                          </Link>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => setEditingMilestone(milestone)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditingMilestone(milestone)
+                              }}
                               className="p-1.5 hover:bg-secondary rounded-md transition-colors text-muted-foreground hover:text-foreground"
                             >
                               <Edit2 size={16} />
                             </button>
                             <button
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation()
                                 if (
                                   confirm(
                                     'Are you sure you want to delete this milestone?'
@@ -245,27 +252,38 @@ export default function MilestonesPage() {
                           </div>
                         </div>
 
-                        {milestone.due_date && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-                            <Calendar size={14} />
-                            <span>{format(new Date(milestone.due_date), 'MMM d, yyyy')}</span>
-                          </div>
-                        )}
+                        <Link href={`/dashboard/milestones/${milestone.id}`}>
+                          {milestone.due_date && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                              <Calendar size={14} />
+                              <span>{format(new Date(milestone.due_date), 'MMM d, yyyy')}</span>
+                            </div>
+                          )}
 
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Progress</span>
-                            <span className="font-medium">
-                              {milestone.completed_issues} / {milestone.issue_count}
-                            </span>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Progress</span>
+                              <span className="font-medium">
+                                {milestone.completed_issues} / {milestone.issue_count}
+                                <span className="ml-1 text-muted-foreground">
+                                  ({Math.round(progress)}%)
+                                </span>
+                              </span>
+                            </div>
+                            <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all ${
+                                  progress === 100
+                                    ? 'bg-green-500'
+                                    : progress >= 50
+                                    ? 'bg-primary'
+                                    : 'bg-amber-500'
+                                }`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary transition-all"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                        </div>
+                        </Link>
                       </motion.div>
                     )
                   })}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { format, formatDistanceToNow, startOfDay, isSameDay } from 'date-fns'
@@ -14,7 +14,10 @@ import {
   LayoutGrid,
   List,
   User2,
+  Users,
+  X,
 } from 'lucide-react'
+import { ProjectMembersPanel } from './project-members-panel'
 
 const PRIORITY_CONFIG = {
   1: { label: 'Urgent', color: 'text-red-500', bg: 'bg-red-500/10', dot: 'bg-red-500' },
@@ -55,6 +58,7 @@ interface Project {
 }
 
 interface User {
+  id?: number
   name?: string | null
   email?: string | null
   image?: string | null
@@ -75,6 +79,7 @@ export function TimelineView({
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<'created_at' | 'updated_at'>('created_at')
+  const [showMembersPanel, setShowMembersPanel] = useState(false)
 
   // Filter issues
   const filteredIssues = issues.filter((issue) => {
@@ -193,6 +198,15 @@ export function TimelineView({
               <option value="created_at">Sort by Created</option>
               <option value="updated_at">Sort by Updated</option>
             </select>
+
+            {/* Team Members */}
+            <button
+              onClick={() => setShowMembersPanel(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors"
+            >
+              <Users size={16} />
+              Team
+            </button>
           </div>
         </div>
       </header>
@@ -367,6 +381,51 @@ export function TimelineView({
           )}
         </div>
       </main>
+
+      {/* Members Panel */}
+      <AnimatePresence>
+        {showMembersPanel && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMembersPanel(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+
+            {/* Panel */}
+            <motion.div
+              initial={{ opacity: 0, x: 100 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 100 }}
+              className="fixed right-0 top-0 h-full w-full max-w-md bg-card border-l border-border shadow-2xl z-50 overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-card/80 backdrop-blur border-b border-border px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Team Members</h2>
+                  <button
+                    onClick={() => setShowMembersPanel(false)}
+                    className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-4">
+                <ProjectMembersPanel
+                  projectId={project.id}
+                  currentUserId={user.id || 0}
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

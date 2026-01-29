@@ -25,7 +25,9 @@ import {
   X,
   LayoutGrid,
   List,
+  Users,
 } from 'lucide-react'
+import { ProjectMembersPanel } from './project-members-panel'
 import { formatDistanceToNow } from 'date-fns'
 
 // Status configuration
@@ -75,6 +77,7 @@ interface KanbanData {
 }
 
 interface User {
+  id?: number
   name?: string | null
   email?: string | null
   image?: string | null
@@ -98,6 +101,7 @@ export function KanbanBoard({
   const [showNewIssue, setShowNewIssue] = useState<string | null>(null)
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [showMembersPanel, setShowMembersPanel] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState<number | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all') // 'all', 'unassigned', or specific user id
   const queryClient = useQueryClient()
@@ -404,6 +408,15 @@ export function KanbanBoard({
                 )}
               </div>
 
+              {/* Team Members */}
+              <button
+                onClick={() => setShowMembersPanel(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors"
+              >
+                <Users size={16} />
+                Team
+              </button>
+
               {/* Rollback */}
               <button className="flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors text-muted-foreground">
                 <Undo2 size={16} />
@@ -445,6 +458,51 @@ export function KanbanBoard({
             issue={selectedIssue}
             onClose={() => setSelectedIssue(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Members Panel */}
+      <AnimatePresence>
+        {showMembersPanel && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMembersPanel(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+
+            {/* Panel */}
+            <motion.div
+              initial={{ opacity: 0, x: 100 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 100 }}
+              className="fixed right-0 top-0 h-full w-full max-w-md bg-card border-l border-border shadow-2xl z-50 overflow-y-auto"
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-card/80 backdrop-blur border-b border-border px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Team Members</h2>
+                  <button
+                    onClick={() => setShowMembersPanel(false)}
+                    className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-4">
+                <ProjectMembersPanel
+                  projectId={project.id}
+                  currentUserId={user.id || 0}
+                />
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
