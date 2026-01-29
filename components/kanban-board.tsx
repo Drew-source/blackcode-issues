@@ -28,6 +28,7 @@ import {
   Users,
 } from 'lucide-react'
 import { ProjectMembersPanel } from './project-members-panel'
+import { CreateIssueModal } from './create-issue-modal'
 import { formatDistanceToNow } from 'date-fns'
 
 // Status configuration
@@ -99,6 +100,8 @@ export function KanbanBoard({
   const [kanban, setKanban] = useState<KanbanData>(initialKanban)
   const [searchQuery, setSearchQuery] = useState('')
   const [showNewIssue, setShowNewIssue] = useState<string | null>(null)
+  const [showRichCreateModal, setShowRichCreateModal] = useState(false)
+  const [richCreateDefaultStatus, setRichCreateDefaultStatus] = useState('backlog')
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [showMembersPanel, setShowMembersPanel] = useState(false)
@@ -445,6 +448,10 @@ export function KanbanBoard({
                 }
                 isCreating={createIssue.isPending}
                 onSelectIssue={setSelectedIssue}
+                onOpenRichCreate={() => {
+                  setRichCreateDefaultStatus(status.id)
+                  setShowRichCreateModal(true)
+                }}
               />
             ))}
           </div>
@@ -505,6 +512,24 @@ export function KanbanBoard({
           </>
         )}
       </AnimatePresence>
+
+      {/* Rich Issue Creation Modal */}
+      <AnimatePresence>
+        {showRichCreateModal && (
+          <CreateIssueModal
+            projectId={project.id}
+            defaultStatus={richCreateDefaultStatus}
+            onClose={() => setShowRichCreateModal(false)}
+            onSuccess={(newIssue) => {
+              // Optimistic update to local state
+              setKanban((prev) => ({
+                ...prev,
+                [newIssue.status]: [...(prev[newIssue.status] || []), newIssue],
+              }))
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -519,6 +544,7 @@ function Column({
   onCreateIssue,
   isCreating,
   onSelectIssue,
+  onOpenRichCreate,
 }: {
   status: typeof STATUSES[number]
   issues: Issue[]
@@ -535,6 +561,7 @@ function Column({
   }) => void
   isCreating: boolean
   onSelectIssue: (issue: Issue) => void
+  onOpenRichCreate: () => void
 }) {
   const [newTitle, setNewTitle] = useState('')
   const [showExpanded, setShowExpanded] = useState(false)
@@ -699,12 +726,24 @@ function Column({
                     )}
 
                     <div className="flex items-center justify-between">
-                      <button
-                        onClick={() => setShowExpanded(!showExpanded)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {showExpanded ? 'Less' : 'More options'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowExpanded(!showExpanded)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          {showExpanded ? 'Less' : 'More options'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            resetForm()
+                            onCancelNewIssue()
+                            onOpenRichCreate()
+                          }}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Full editor
+                        </button>
+                      </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => {

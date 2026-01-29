@@ -9,8 +9,6 @@ import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
-  Edit2,
-  Save,
   MessageSquare,
   Paperclip,
   Calendar,
@@ -144,14 +142,10 @@ function getChangeSummary(item: ActivityItem): string {
 export default function IssueDetailPage() {
   const params = useParams()
   const queryClient = useQueryClient()
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [editedTitle, setEditedTitle] = useState('')
   const [editedDescription, setEditedDescription] = useState('')
-  const [editedStatus, setEditedStatus] = useState('')
-  const [editedPriority, setEditedPriority] = useState<number>(3)
-  const [editedAssigneeId, setEditedAssigneeId] = useState<number | null>(null)
-  const [editedStartDate, setEditedStartDate] = useState<string>('')
-  const [editedDueDate, setEditedDueDate] = useState<string>('')
   const [commentContent, setCommentContent] = useState('')
   const [showActivity, setShowActivity] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
@@ -210,17 +204,6 @@ export default function IssueDetailPage() {
     enabled: !!issue?.project_id,
   })
 
-  // Initialize edit state
-  if (issue && !isEditing && editedTitle === '') {
-    setEditedTitle(issue.title)
-    setEditedDescription(issue.description || '')
-    setEditedStatus(issue.status)
-    setEditedPriority(issue.priority)
-    setEditedAssigneeId(issue.assignee_id || null)
-    setEditedStartDate(issue.start_date ? issue.start_date.split('T')[0] : '')
-    setEditedDueDate(issue.due_date ? issue.due_date.split('T')[0] : '')
-  }
-
   const updateIssue = useMutation({
     mutationFn: async (data: Partial<Issue>) => {
       const res = await fetch(`/api/issues/${issueId}`, {
@@ -236,8 +219,7 @@ export default function IssueDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['all-issues'] })
       queryClient.invalidateQueries({ queryKey: ['activity', issueId] })
       queryClient.invalidateQueries({ queryKey: ['kanban', issue?.project_id] })
-      setIsEditing(false)
-      toast.success('Issue updated!')
+      // No toast for inline updates - smoother UX
     },
     onError: () => {
       toast.error('Failed to update issue')
@@ -354,18 +336,6 @@ export default function IssueDetailPage() {
     }
   }, [issueId, refetchAttachments, queryClient])
 
-  const handleSave = () => {
-    updateIssue.mutate({
-      title: editedTitle,
-      description: editedDescription,
-      status: editedStatus,
-      priority: editedPriority,
-      assignee_id: editedAssigneeId ?? undefined,
-      start_date: editedStartDate || null,
-      due_date: editedDueDate || null,
-    } as any)
-  }
-
   if (isLoading) {
     return (
       <div className="p-8">
@@ -409,15 +379,42 @@ export default function IssueDetailPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-mono text-muted-foreground">#{issue.id}</span>
-                  {isEditing ? (
-                    <input
-                      value={editedTitle}
-                      onChange={(e) => setEditedTitle(e.target.value)}
-                      className="px-3 py-1 bg-background border border-input rounded-lg text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-ring"
-                      autoFocus
-                    />
+                  {isEditingTitle ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && editedTitle.trim()) {
+                            updateIssue.mutate({ title: editedTitle.trim() })
+                            setIsEditingTitle(false)
+                          }
+                          if (e.key === 'Escape') {
+                            setEditedTitle(issue.title)
+                            setIsEditingTitle(false)
+                          }
+                        }}
+                        onBlur={() => {
+                          if (editedTitle.trim() && editedTitle !== issue.title) {
+                            updateIssue.mutate({ title: editedTitle.trim() })
+                          }
+                          setIsEditingTitle(false)
+                        }}
+                        className="px-3 py-1 bg-background border border-input rounded-lg text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-ring min-w-[300px]"
+                        autoFocus
+                      />
+                    </div>
                   ) : (
-                    <h1 className="text-2xl font-bold">{issue.title}</h1>
+                    <h1
+                      onClick={() => {
+                        setEditedTitle(issue.title)
+                        setIsEditingTitle(true)
+                      }}
+                      className="text-2xl font-bold cursor-pointer hover:bg-secondary/30 px-2 py-1 -mx-2 -my-1 rounded-lg transition-colors"
+                      title="Click to edit"
+                    >
+                      {issue.title}
+                    </h1>
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -432,43 +429,10 @@ export default function IssueDetailPage() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {isEditing ? (
-                <>
-                  <button
-                    onClick={() => {
-                      setIsEditing(false)
-                      setEditedTitle(issue.title)
-                      setEditedDescription(issue.description || '')
-                      setEditedStatus(issue.status)
-                      setEditedPriority(issue.priority)
-                      setEditedAssigneeId(issue.assignee_id || null)
-                      setEditedStartDate(issue.start_date ? issue.start_date.split('T')[0] : '')
-                      setEditedDueDate(issue.due_date ? issue.due_date.split('T')[0] : '')
-                    }}
-                    className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={updateIssue.isPending || !editedTitle.trim()}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    <Save size={16} />
-                    Save
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-secondary text-foreground rounded-lg text-sm font-medium hover:bg-secondary/80"
-                >
-                  <Edit2 size={16} />
-                  Edit
-                </button>
-              )}
-            </div>
+            {/* Auto-save indicator */}
+            {updateIssue.isPending && (
+              <span className="text-xs text-muted-foreground">Saving...</span>
+            )}
           </div>
         </div>
       </header>
@@ -478,20 +442,58 @@ export default function IssueDetailPage() {
         <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-6">
           {/* Main content */}
           <div className="md:col-span-2 space-y-6">
-            {/* Description */}
+            {/* Description - Always editable like Linear */}
             <div className="bg-card rounded-lg border border-border p-6">
-              <h2 className="text-sm font-semibold mb-3">Description</h2>
-              {isEditing ? (
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold">Description</h2>
+                {isEditingDescription && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditedDescription(issue.description || '')
+                        setIsEditingDescription(false)
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        updateIssue.mutate({ description: editedDescription })
+                        setIsEditingDescription(false)
+                      }}
+                      disabled={updateIssue.isPending}
+                      className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      {updateIssue.isPending ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isEditingDescription ? (
                 <RichTextEditor
                   content={editedDescription}
                   onChange={setEditedDescription}
-                  placeholder="Add a description..."
+                  placeholder="Add a description... Use the toolbar for formatting, images, code blocks, and more."
                   onImageUpload={handleImageUpload}
                 />
-              ) : issue.description ? (
-                <RichTextDisplay content={issue.description} />
               ) : (
-                <p className="text-sm text-muted-foreground">No description provided.</p>
+                <div
+                  onClick={() => {
+                    setEditedDescription(issue.description || '')
+                    setIsEditingDescription(true)
+                  }}
+                  className="cursor-pointer hover:bg-secondary/30 rounded-lg transition-colors min-h-[100px] -m-2 p-2"
+                  title="Click to edit"
+                >
+                  {issue.description ? (
+                    <RichTextDisplay content={issue.description} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      Click to add a description...
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -670,144 +672,88 @@ export default function IssueDetailPage() {
             </div>
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar - Inline editable fields */}
           <div className="space-y-4">
-            {/* Status */}
+            {/* Status - Inline select */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
                 Status
               </label>
-              {isEditing ? (
-                <select
-                  value={editedStatus}
-                  onChange={(e) => setEditedStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className={`status-badge status-${issue.status}`}>
-                  {status?.label || issue.status}
-                </span>
-              )}
+              <select
+                value={issue.status}
+                onChange={(e) => updateIssue.mutate({ status: e.target.value })}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:border-primary transition-colors"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Priority */}
+            {/* Priority - Inline select */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
                 Priority
               </label>
-              {isEditing ? (
-                <select
-                  value={editedPriority}
-                  onChange={(e) => setEditedPriority(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value={1}>Urgent</option>
-                  <option value={2}>High</option>
-                  <option value={3}>Medium</option>
-                  <option value={4}>Low</option>
-                </select>
-              ) : (
-                priority && (
-                  <span
-                    className={`inline-block text-xs px-2 py-1 rounded-full ${priority.bg} ${priority.color}`}
-                  >
-                    {priority.label}
-                  </span>
-                )
-              )}
+              <select
+                value={issue.priority}
+                onChange={(e) => updateIssue.mutate({ priority: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:border-primary transition-colors"
+              >
+                <option value={1}>Urgent</option>
+                <option value={2}>High</option>
+                <option value={3}>Medium</option>
+                <option value={4}>Low</option>
+              </select>
             </div>
 
-            {/* Assignee */}
+            {/* Assignee - Inline select */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
                 Assignee
               </label>
-              {isEditing ? (
-                <select
-                  value={editedAssigneeId || ''}
-                  onChange={(e) =>
-                    setEditedAssigneeId(e.target.value ? parseInt(e.target.value) : null)
-                  }
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((m: any) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.name || m.email}
-                    </option>
-                  ))}
-                </select>
-              ) : issue.assignee_avatar ? (
-                <div className="flex items-center gap-2">
-                  <Image
-                    src={issue.assignee_avatar}
-                    alt={issue.assignee_name || 'Assignee'}
-                    width={24}
-                    height={24}
-                    className="rounded-full"
-                  />
-                  <span className="text-sm">{issue.assignee_name}</span>
-                </div>
-              ) : issue.assignee_name ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center text-xs font-medium">
-                    {issue.assignee_name.charAt(0)}
-                  </div>
-                  <span className="text-sm">{issue.assignee_name}</span>
-                </div>
-              ) : (
-                <span className="text-sm text-muted-foreground">Unassigned</span>
-              )}
+              <select
+                value={issue.assignee_id || ''}
+                onChange={(e) => updateIssue.mutate({ assignee_id: e.target.value ? parseInt(e.target.value) : null } as any)}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:border-primary transition-colors"
+              >
+                <option value="">Unassigned</option>
+                {members.map((m: any) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.name || m.email}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Start Date */}
+            {/* Start Date - Inline input */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
                 <Calendar size={12} className="inline mr-1" />
                 Start Date
               </label>
-              {isEditing ? (
-                <input
-                  type="date"
-                  value={editedStartDate}
-                  onChange={(e) => setEditedStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              ) : issue.start_date ? (
-                <p className="text-sm">
-                  {new Date(issue.start_date).toLocaleDateString()}
-                </p>
-              ) : (
-                <span className="text-sm text-muted-foreground">Not set</span>
-              )}
+              <input
+                type="date"
+                value={issue.start_date ? issue.start_date.split('T')[0] : ''}
+                onChange={(e) => updateIssue.mutate({ start_date: e.target.value || null } as any)}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:border-primary transition-colors"
+              />
             </div>
 
-            {/* Due Date */}
+            {/* Due Date - Inline input */}
             <div className="bg-card rounded-lg border border-border p-4">
               <label className="block text-xs font-medium text-muted-foreground mb-2">
                 <Calendar size={12} className="inline mr-1" />
                 Due Date
               </label>
-              {isEditing ? (
-                <input
-                  type="date"
-                  value={editedDueDate}
-                  onChange={(e) => setEditedDueDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              ) : issue.due_date ? (
-                <p className="text-sm">
-                  {new Date(issue.due_date).toLocaleDateString()}
-                </p>
-              ) : (
-                <span className="text-sm text-muted-foreground">Not set</span>
-              )}
+              <input
+                type="date"
+                value={issue.due_date ? issue.due_date.split('T')[0] : ''}
+                onChange={(e) => updateIssue.mutate({ due_date: e.target.value || null } as any)}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:border-primary transition-colors"
+              />
             </div>
 
             {/* Milestone */}

@@ -43,7 +43,14 @@ export function ProjectView({
     queryFn: async () => {
       const res = await fetch(`/api/issues?project_id=${project.id}&includeProject=true`)
       if (!res.ok) return allIssues
-      return res.json()
+      const data = await res.json()
+      // Ensure we always return an array
+      if (Array.isArray(data)) return data
+      // If it's kanban format, flatten it
+      if (data && typeof data === 'object') {
+        return Object.values(data).flat()
+      }
+      return allIssues
     },
     enabled: view === 'timeline',
     initialData: allIssues,

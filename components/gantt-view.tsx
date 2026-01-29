@@ -91,7 +91,7 @@ type ZoomLevel = typeof ZOOM_LEVELS[number]
 
 export function GanttView({
   project,
-  issues,
+  issues: rawIssues,
   user,
   view = 'timeline',
   onViewChange,
@@ -102,6 +102,16 @@ export function GanttView({
   view?: 'kanban' | 'timeline'
   onViewChange?: (view: 'kanban' | 'timeline') => void
 }) {
+  // Ensure issues is always an array (handle edge cases where it might be object/null)
+  const issues = useMemo(() => {
+    if (!rawIssues) return []
+    if (Array.isArray(rawIssues)) return rawIssues
+    // If it's an object (e.g., kanban data), flatten it
+    if (typeof rawIssues === 'object') {
+      return Object.values(rawIssues).flat() as Issue[]
+    }
+    return []
+  }, [rawIssues])
   const router = useRouter()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState('')

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -14,8 +14,10 @@ import {
   X,
   MessageSquare,
   Paperclip,
+  Plus,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { CreateIssueModal } from '@/components/create-issue-modal'
 
 const STATUSES = [
   { id: 'backlog', label: 'Backlog' },
@@ -63,6 +65,7 @@ export default function AllIssuesPage() {
   const [sortField, setSortField] = useState<SortField>('updated_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [showFilters, setShowFilters] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const router = useRouter()
 
   // Fetch all issues
@@ -173,6 +176,13 @@ export default function AllIssuesPage() {
                 {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''}
               </p>
             </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus size={18} />
+              New Issue
+            </button>
           </div>
 
           {/* Search and Filters */}
@@ -489,6 +499,19 @@ export default function AllIssuesPage() {
           </div>
         )}
       </main>
+
+      {/* Create Issue Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <CreateIssueModal
+            onClose={() => setShowCreateModal(false)}
+            onSuccess={(newIssue) => {
+              // Navigate to the new issue
+              router.push(`/dashboard/issues/${newIssue.id}`)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
