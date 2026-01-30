@@ -144,51 +144,151 @@ export function Dashboard({ user }: { user: User }) {
 }
 
 function ProjectCard({ project, index }: { project: Project; index: number }) {
+  const [expanded, setExpanded] = useState(false)
+
+  // Calculate completion rate
+  const completedIssues = (project.issue_count || 0) - (project.open_issues || 0)
+  const completionRate = project.issue_count > 0
+    ? Math.round((completedIssues / project.issue_count) * 100)
+    : 0
+
+  // Generate a consistent color based on project id
+  const colors = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899']
+  const projectColor = colors[project.id % colors.length]
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
+      layout
     >
-      <Link href={`/dashboard/${project.id}`}>
-        <div className="bg-card rounded-xl border border-border p-6 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer group">
-          <div className="flex items-start justify-between mb-4">
+      <div className="bg-card rounded-xl border border-border overflow-hidden hover:border-primary/50 hover:shadow-lg transition-all">
+        {/* Banner */}
+        <div
+          className="h-12 relative"
+          style={{
+            background: `linear-gradient(135deg, ${projectColor}50, ${projectColor}20)`,
+          }}
+        />
+
+        {/* Content */}
+        <div className="p-4">
+          {/* Header row with logo */}
+          <div className="flex items-start justify-between mb-3 -mt-8">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary font-bold">
+              <div
+                className="w-12 h-12 rounded-xl border-4 border-card shadow-lg flex items-center justify-center text-white font-bold text-lg"
+                style={{ backgroundColor: projectColor }}
+              >
                 {project.name.charAt(0).toUpperCase()}
               </div>
-              <div>
-                <h3 className="font-semibold group-hover:text-primary transition-colors">
-                  {project.name}
-                </h3>
+              <div className="pt-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold">{project.name}</h3>
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-500 rounded">
+                    P2
+                  </span>
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  #{project.id}
+                  #{project.id} • Team
                 </p>
               </div>
             </div>
-            <ChevronRight
-              size={18}
-              className="text-muted-foreground group-hover:text-primary transition-colors"
-            />
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                setExpanded(!expanded)
+              }}
+              className="mt-4 p-1.5 hover:bg-secondary rounded-lg transition-colors"
+            >
+              <motion.div
+                animate={{ rotate: expanded ? 90 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronRight size={16} className="text-muted-foreground" />
+              </motion.div>
+            </button>
           </div>
-          
+
+          {/* Description */}
           {project.description && (
-            <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
               {project.description}
             </p>
           )}
 
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <span>{project.open_issues || 0} open</span>
+          {/* Progress bar */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-muted-foreground">
+                <span className="text-green-500">● {project.open_issues || 0} open</span>
+                {' - '}
+                {project.issue_count || 0} total
+              </span>
+              <span className="text-muted-foreground">{completionRate}%</span>
             </div>
-            <div className="text-muted-foreground">
-              {project.issue_count || 0} total
+            <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+              <motion.div
+                className="h-full bg-green-500 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${completionRate}%` }}
+                transition={{ duration: 0.5, delay: index * 0.05 }}
+              />
             </div>
           </div>
+
+          {/* View project link */}
+          <Link
+            href={`/dashboard/${project.id}`}
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            View project
+            <ChevronRight size={14} />
+          </Link>
         </div>
-      </Link>
+
+        {/* Expandable section */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="border-t border-border overflow-hidden"
+            >
+              <div className="p-4 space-y-4 bg-secondary/30">
+                {/* Recent issues placeholder */}
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2">Recent Issues</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">No recent issues</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Team placeholder */}
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2">Team</h4>
+                  <div className="flex -space-x-2">
+                    <div className="w-7 h-7 rounded-full bg-primary/20 border-2 border-card flex items-center justify-center text-[10px] font-medium">
+                      ?
+                    </div>
+                  </div>
+                </div>
+
+                {/* Next milestone placeholder */}
+                <div>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2">Next Milestone</h4>
+                  <p className="text-sm text-muted-foreground">No milestones set</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   )
 }
