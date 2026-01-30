@@ -38,6 +38,8 @@ interface RichTextEditorProps {
   placeholder?: string
   editable?: boolean
   onImageUpload?: (file: File) => Promise<string>
+  hideToolbar?: boolean
+  minHeight?: string
 }
 
 interface MenuButtonProps {
@@ -273,6 +275,8 @@ export function RichTextEditor({
   placeholder = 'Write something...',
   editable = true,
   onImageUpload,
+  hideToolbar = false,
+  minHeight = '150px',
 }: RichTextEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -300,7 +304,8 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[150px] p-4',
+        class: `prose prose-sm dark:prose-invert max-w-none focus:outline-none p-4`,
+        style: `min-height: ${minHeight}`,
       },
     },
   })
@@ -316,7 +321,7 @@ export function RichTextEditor({
 
   return (
     <div className="border border-input rounded-lg bg-background overflow-hidden">
-      {editable && <MenuBar editor={editor} onImageUpload={onImageUpload} />}
+      {editable && !hideToolbar && <MenuBar editor={editor} onImageUpload={onImageUpload} />}
       <EditorContent editor={editor} />
       {editable && !content && (
         <style jsx global>{`
