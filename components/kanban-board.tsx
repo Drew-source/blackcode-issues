@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -1002,6 +1002,7 @@ function IssueDetailModal({
 }) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Local state for editing
   const [title, setTitle] = useState(issue.title)
@@ -1009,7 +1010,7 @@ function IssueDetailModal({
   const [status, setStatus] = useState(issue.status)
   const [priority, setPriority] = useState(issue.priority)
   const [assigneeId, setAssigneeId] = useState<number | undefined>(issue.assignee_id)
-  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle')
 
   // Fetch project members for assignee dropdown
   const { data: members = [] } = useQuery({
@@ -1035,28 +1036,46 @@ function IssueDetailModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-issues'] })
       queryClient.invalidateQueries({ queryKey: ['all-issues'] })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
     },
     onError: () => {
-      toast.error('Failed to update issue')
+      toast.error('Failed to save')
+      setSaveStatus('idle')
     },
   })
 
-  // Image upload handler for rich text editor
+  // Auto-save with debounce for title and description
+  const autoSave = useCallback((data: Partial<Issue>) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+    setSaveStatus('saving')
+    saveTimeoutRef.current = setTimeout(() => {
+      updateIssue.mutate(data)
+    }, 800)
+  }, [updateIssue])
+
+  // Image upload handler
   const handleImageUpload = async (file: File): Promise<string> => {
     const formData = new FormData()
     formData.append('file', file)
-
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    })
-
-    if (!res.ok) {
-      throw new Error('Failed to upload image')
-    }
-
+    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+    if (!res.ok) throw new Error('Failed to upload image')
     const data = await res.json()
     return data.url
+  }
+
+  const handleTitleChange = (newTitle: string) => {
+    setTitle(newTitle)
+    if (newTitle.trim()) {
+      autoSave({ title: newTitle.trim() })
+    }
+  }
+
+  const handleDescriptionChange = (newDescription: string) => {
+    setDescription(newDescription)
+    autoSave({ description: newDescription })
   }
 
   const handleStatusChange = (newStatus: string) => {
@@ -1074,26 +1093,19 @@ function IssueDetailModal({
     updateIssue.mutate({ assignee_id: newAssigneeId || null } as any)
   }
 
-  const handleSave = async () => {
-    setIsSaving(true)
-    try {
-      await updateIssue.mutateAsync({
-        title: title.trim(),
-        description: description,
-      })
-      toast.success('Issue saved')
-      onClose()
-    } catch {
-      // Error handled by mutation
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   const handleOpenFullPage = () => {
     onClose()
     router.push(`/dashboard/issues/${issue.id}`)
   }
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const priorityConfig = PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG]
 
@@ -1105,160 +1117,105 @@ function IssueDetailModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+        className="fixed inset-0 bg-black/60 z-40"
       />
 
-      {/* Modal - Full screen on mobile, large centered modal on desktop */}
+      {/* Modal - Clean, Linear-style */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="fixed inset-4 md:inset-8 lg:inset-16 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="fixed inset-4 md:inset-8 lg:inset-12 bg-card rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col"
       >
-        {/* Header */}
-        <div className="flex-shrink-0 bg-card border-b border-border px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
-                #{issue.id}
-              </span>
-              <span className="text-sm text-muted-foreground">Edit Issue</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleOpenFullPage}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
-                title="Open full page"
-              >
-                <ExternalLink size={16} />
-                Full Page
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
+        {/* Minimal Header */}
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono text-muted-foreground">#{issue.id}</span>
+            {saveStatus === 'saving' && (
+              <span className="text-xs text-muted-foreground">Saving...</span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="text-xs text-green-500">Saved</span>
+            )}
           </div>
-        </div>
-
-        {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-6">
-            {/* Main content - 2 columns */}
-            <div className="md:col-span-2 space-y-6">
-              {/* Title Input */}
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
-                  Title
-                </label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Issue title..."
-                  className="w-full px-4 py-3 text-xl font-semibold bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-
-              {/* Description with Rich Text Editor */}
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
-                  Description
-                </label>
-                <div className="border border-input rounded-lg overflow-hidden">
-                  <RichTextEditor
-                    content={description}
-                    onChange={setDescription}
-                    placeholder="Add a description... Paste images directly or use the toolbar for formatting."
-                    onImageUpload={handleImageUpload}
-                    minHeight="250px"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Sidebar - 1 column */}
-            <div className="space-y-4">
-              {/* Status */}
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1.5">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Priority */}
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1.5">Priority</label>
-                <select
-                  value={priority}
-                  onChange={(e) => handlePriorityChange(parseInt(e.target.value))}
-                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                >
-                  <option value={1}>Urgent</option>
-                  <option value={2}>High</option>
-                  <option value={3}>Medium</option>
-                  <option value={4}>Low</option>
-                </select>
-              </div>
-
-              {/* Assignee */}
-              <div>
-                <label className="block text-sm text-muted-foreground mb-1.5">Assignee</label>
-                <select
-                  value={assigneeId || ''}
-                  onChange={(e) => handleAssigneeChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-                >
-                  <option value="">Unassigned</option>
-                  {members.map((m: any) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name || m.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Meta info */}
-              <div className="pt-4 border-t border-border text-sm text-muted-foreground space-y-2">
-                <div className="flex justify-between">
-                  <span>Created</span>
-                  <span>{formatDistanceToNow(new Date(issue.created_at))} ago</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Comments</span>
-                  <span>{issue.comment_count}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer with Save/Cancel */}
-        <div className="flex-shrink-0 bg-card border-t border-border px-6 py-4">
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleOpenFullPage}
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+              title="Open full page"
+            >
+              <ExternalLink size={16} />
+            </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+              className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
             >
-              Cancel
+              <X size={18} />
             </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving || !title.trim()}
-              className="px-6 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto p-6 md:p-10">
+            {/* Title - Inline editable, no border */}
+            <input
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder="Issue title..."
+              className="w-full text-2xl md:text-3xl font-bold bg-transparent border-none focus:outline-none placeholder:text-muted-foreground/40 mb-6"
+            />
+
+            {/* Properties Row - Compact, inline */}
+            <div className="flex flex-wrap items-center gap-2 mb-8 text-sm">
+              <select
+                value={status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="bg-secondary/50 hover:bg-secondary border-none rounded-md px-3 py-1.5 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={priority}
+                onChange={(e) => handlePriorityChange(parseInt(e.target.value))}
+                className={`bg-secondary/50 hover:bg-secondary border-none rounded-md px-3 py-1.5 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring ${priorityConfig?.color || ''}`}
+              >
+                <option value={1}>Urgent</option>
+                <option value={2}>High</option>
+                <option value={3}>Medium</option>
+                <option value={4}>Low</option>
+              </select>
+
+              <select
+                value={assigneeId || ''}
+                onChange={(e) => handleAssigneeChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                className="bg-secondary/50 hover:bg-secondary border-none rounded-md px-3 py-1.5 text-sm cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">Unassigned</option>
+                {members.map((m: any) => (
+                  <option key={m.id} value={m.id}>{m.name || m.email}</option>
+                ))}
+              </select>
+
+              <span className="text-muted-foreground/60 text-xs ml-auto">
+                {formatDistanceToNow(new Date(issue.created_at))} ago
+              </span>
+            </div>
+
+            {/* Description - Clean rich text, no toolbar visible */}
+            <div className="prose prose-invert max-w-none">
+              <RichTextEditor
+                content={description}
+                onChange={handleDescriptionChange}
+                placeholder="Add a description... Just start typing. Paste images with Ctrl+V."
+                onImageUpload={handleImageUpload}
+                hideToolbar={true}
+                minHeight="300px"
+              />
+            </div>
           </div>
         </div>
       </motion.div>
