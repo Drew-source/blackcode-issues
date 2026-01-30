@@ -68,18 +68,11 @@ export default function AllIssuesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const router = useRouter()
 
-  // Fetch all issues
+  // Fetch all issues (filtering is done client-side for simplicity with Neon serverless)
   const { data: issues = [], isLoading } = useQuery<Issue[]>({
-    queryKey: ['all-issues', statusFilter, priorityFilter, assigneeFilter, projectFilter],
+    queryKey: ['all-issues'],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (statusFilter) params.set('status', statusFilter)
-      if (priorityFilter) params.set('priority', priorityFilter.toString())
-      if (assigneeFilter) params.set('assignee_id', assigneeFilter.toString())
-      if (projectFilter) params.set('project_id', projectFilter.toString())
-      params.set('includeProject', 'true')
-
-      const res = await fetch(`/api/issues?${params.toString()}`)
+      const res = await fetch('/api/issues?includeProject=true')
       if (!res.ok) throw new Error('Failed to fetch issues')
       return res.json()
     },
@@ -108,6 +101,15 @@ export default function AllIssuesPage() {
   // Filter and sort issues
   const filteredIssues = issues
     .filter((issue) => {
+      // Status filter
+      if (statusFilter && issue.status !== statusFilter) return false
+      // Priority filter
+      if (priorityFilter && issue.priority !== priorityFilter) return false
+      // Assignee filter
+      if (assigneeFilter && issue.assignee_id !== assigneeFilter) return false
+      // Project filter
+      if (projectFilter && issue.project_id !== projectFilter) return false
+      // Search query
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         if (
