@@ -174,8 +174,12 @@ export default function AllIssuesPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold">All Issues</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {filteredIssues.length} issue{filteredIssues.length !== 1 ? 's' : ''}
+              <p className="text-sm text-muted-foreground mt-1" data-loading={isLoading || undefined}>
+                {isLoading ? (
+                  <span className="inline-block h-4 w-20 bg-muted animate-pulse rounded" />
+                ) : (
+                  `${filteredIssues.length} issue${filteredIssues.length !== 1 ? 's' : ''}`
+                )}
               </p>
             </div>
             <button
@@ -315,7 +319,11 @@ export default function AllIssuesPage() {
       {/* Table */}
       <main className="p-6">
         {isLoading ? (
-          <div className="space-y-3">
+          <div data-loading="true" className="space-y-3">
+            <div className="text-center py-8">
+              <div className="inline-flex items-center justify-center w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-muted-foreground">Loading issues...</p>
+            </div>
             {[...Array(10)].map((_, i) => (
               <div
                 key={i}

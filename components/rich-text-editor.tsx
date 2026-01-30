@@ -4,8 +4,9 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
+import Placeholder from '@tiptap/extension-placeholder'
 import DOMPurify from 'dompurify'
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 
 // Validate URL to prevent javascript: protocol XSS attacks
 function isValidUrl(url: string): boolean {
@@ -278,6 +279,8 @@ export function RichTextEditor({
   hideToolbar = false,
   minHeight = '150px',
 }: RichTextEditorProps) {
+  const editorContainerRef = useRef<HTMLDivElement>(null)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -287,7 +290,7 @@ export function RichTextEditor({
       }),
       Image.configure({
         HTMLAttributes: {
-          class: 'max-w-full rounded-lg',
+          class: 'max-w-full rounded-lg cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all',
         },
       }),
       Link.configure({
@@ -296,16 +299,85 @@ export function RichTextEditor({
           class: 'text-primary underline hover:no-underline',
         },
       }),
+      Placeholder.configure({
+        placeholder,
+      }),
     ],
     content,
     editable,
-    onUpdate: ({ editor }: { editor: Editor }) => {
-      onChange(editor.getHTML())
+    onUpdate: ({ editor: ed }: { editor: Editor }) => {
+      onChange(ed.getHTML())
     },
     editorProps: {
       attributes: {
         class: `prose prose-sm dark:prose-invert max-w-none focus:outline-none p-4`,
         style: `min-height: ${minHeight}`,
+      },
+      // Handle paste events for images
+      handlePaste: (view, event) => {
+        if (!onImageUpload) return false
+
+        const items = event.clipboardData?.items
+        if (!items) return false
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i]
+          if (item.type.startsWith('image/')) {
+            event.preventDefault()
+            const file = item.getAsFile()
+            if (file) {
+              // Show uploading placeholder
+              const placeholderSrc = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23f0f0f0" width="100" height="100"/%3E%3Ctext x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="12"%3EUploading...%3C/text%3E%3C/svg%3E'
+
+              onImageUpload(file)
+                .then((url) => {
+                  view.dispatch(view.state.tr.replaceSelectionWith(
+                    view.state.schema.nodes.image.create({ src: url })
+                  ))
+                })
+                .catch((error) => {
+                  console.error('Failed to upload pasted image:', error)
+                })
+            }
+            return true
+          }
+        }
+
+        return false
+      },
+      // Handle drop events for images
+      handleDrop: (view, event, slice, moved) => {
+        if (!onImageUpload) return false
+        if (moved) return false // Let default behavior handle moved content
+
+        const files = event.dataTransfer?.files
+        if (!files || files.length === 0) return false
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i]
+          if (file.type.startsWith('image/')) {
+            event.preventDefault()
+
+            onImageUpload(file)
+              .then((url) => {
+                // Get drop position
+                const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY })
+                if (coordinates) {
+                  const tr = view.state.tr.insert(
+                    coordinates.pos,
+                    view.state.schema.nodes.image.create({ src: url })
+                  )
+                  view.dispatch(tr)
+                }
+              })
+              .catch((error) => {
+                console.error('Failed to upload dropped image:', error)
+              })
+            return true
+          }
+        }
+
+        return false
       },
     },
   })
@@ -320,26 +392,41 @@ export function RichTextEditor({
   }
 
   return (
-    <div className="border border-input rounded-lg bg-background overflow-hidden">
+    <div ref={editorContainerRef} className="border border-input rounded-lg bg-background overflow-hidden">
       {editable && !hideToolbar && <MenuBar editor={editor} onImageUpload={onImageUpload} />}
       <EditorContent editor={editor} />
-      {editable && !content && (
-        <style jsx global>{`
-          .ProseMirror p.is-editor-empty:first-child::before {
-            content: '${placeholder}';
-            float: left;
-            color: hsl(var(--muted-foreground));
-            pointer-events: none;
-            height: 0;
-          }
-        `}</style>
-      )}
+      <style jsx global>{`
+        .ProseMirror p.is-empty::before {
+          content: attr(data-placeholder);
+          float: left;
+          color: hsl(var(--muted-foreground));
+          pointer-events: none;
+          height: 0;
+        }
+        .ProseMirror img {
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+        .ProseMirror img:hover {
+          box-shadow: 0 0 0 2px hsl(var(--primary) / 0.3);
+        }
+        .ProseMirror img.ProseMirror-selectednode {
+          box-shadow: 0 0 0 3px hsl(var(--primary));
+        }
+      `}</style>
     </div>
   )
 }
 
+interface RichTextDisplayProps {
+  content: string
+  onImageClick?: (src: string, alt?: string) => void
+}
+
 // Read-only HTML renderer for displaying rich content
-export function RichTextDisplay({ content }: { content: string }) {
+export function RichTextDisplay({ content, onImageClick }: RichTextDisplayProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+
   // Sanitize HTML content to prevent XSS attacks
   const sanitizedContent = typeof window !== 'undefined'
     ? DOMPurify.sanitize(content)
@@ -350,7 +437,7 @@ export function RichTextDisplay({ content }: { content: string }) {
       StarterKit,
       Image.configure({
         HTMLAttributes: {
-          class: 'max-w-full rounded-lg',
+          class: 'max-w-full rounded-lg cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all',
         },
       }),
       Link.configure({
@@ -364,12 +451,30 @@ export function RichTextDisplay({ content }: { content: string }) {
     editable: false,
   })
 
+  // Add click handler for images
+  useEffect(() => {
+    if (!containerRef.current || !onImageClick) return
+
+    const handleImageClick = (e: Event) => {
+      const target = e.target as HTMLElement
+      if (target.tagName === 'IMG') {
+        const img = target as HTMLImageElement
+        onImageClick(img.src, img.alt)
+      }
+    }
+
+    containerRef.current.addEventListener('click', handleImageClick)
+    return () => {
+      containerRef.current?.removeEventListener('click', handleImageClick)
+    }
+  }, [onImageClick])
+
   if (!editor) {
     return <div className="animate-pulse h-20 bg-secondary/20 rounded" />
   }
 
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
+    <div ref={containerRef} className="prose prose-sm dark:prose-invert max-w-none">
       <EditorContent editor={editor} />
     </div>
   )

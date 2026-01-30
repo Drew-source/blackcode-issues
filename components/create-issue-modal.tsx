@@ -237,7 +237,7 @@ export function CreateIssueModal({
       >
         <div
           className={`bg-card rounded-2xl border border-border shadow-2xl w-full flex flex-col overflow-hidden transition-all duration-200 ${
-            isExpanded ? 'max-w-5xl max-h-[95vh]' : 'max-w-2xl max-h-[85vh]'
+            isExpanded ? 'max-w-5xl max-h-[95vh]' : 'max-w-3xl max-h-[90vh]'
           }`}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={handleKeyDown}
@@ -310,15 +310,15 @@ export function CreateIssueModal({
               autoFocus
             />
 
-            {/* Description - Buttonless rich text editor */}
-            <div className="min-h-[120px]">
+            {/* Description - Rich text editor with toolbar */}
+            <div className="min-h-[200px]">
               <RichTextEditor
                 content={description}
                 onChange={setDescription}
-                placeholder="Add description... (supports markdown: **bold**, *italic*, # heading)"
+                placeholder="Add description... Paste images directly or use the toolbar for formatting."
                 onImageUpload={handleImageUpload}
-                hideToolbar={true}
-                minHeight={isExpanded ? '300px' : '120px'}
+                hideToolbar={false}
+                minHeight={isExpanded ? '350px' : '200px'}
               />
             </div>
           </div>

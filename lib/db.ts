@@ -8,6 +8,15 @@ export interface Project {
   id: number
   name: string
   description?: string
+  status?: string
+  owner_id?: number
+  priority?: string
+  visibility?: string
+  color?: string
+  icon_url?: string
+  banner_url?: string
+  start_date?: string
+  end_date?: string
   created_at?: string
   updated_at?: string
 }
@@ -127,18 +136,59 @@ export async function createProject(data: { name: string; description?: string; 
   return project || null
 }
 
-export async function updateProject(id: number, data: Partial<{ name: string; description: string; status: string }>): Promise<Project | null> {
-  // Build update dynamically using template literals
+export async function updateProject(id: number, data: Partial<{
+  name: string
+  description: string
+  status: string
+  priority: string
+  visibility: string
+  color: string
+  icon_url: string | null
+  banner_url: string | null
+  start_date: string | null
+  end_date: string | null
+  owner_id: number | null
+}>): Promise<Project | null> {
+  // Get current project first
+  const current = await getProject(id)
+  if (!current) return null
+
+  // Merge with updates
+  const name = data.name !== undefined ? data.name : current.name
+  const description = data.description !== undefined ? data.description : current.description
+  const status = data.status !== undefined ? data.status : current.status
+  const priority = data.priority !== undefined ? data.priority : current.priority
+  const visibility = data.visibility !== undefined ? data.visibility : current.visibility
+  const color = data.color !== undefined ? data.color : current.color
+  const icon_url = data.icon_url !== undefined ? data.icon_url : current.icon_url
+  const banner_url = data.banner_url !== undefined ? data.banner_url : current.banner_url
+  const start_date = data.start_date !== undefined ? data.start_date : current.start_date
+  const end_date = data.end_date !== undefined ? data.end_date : current.end_date
+  const owner_id = data.owner_id !== undefined ? data.owner_id : current.owner_id
+
   const { rows } = await sql`
-    UPDATE projects 
-    SET 
-      name = COALESCE(${data.name ?? null}, name),
-      description = COALESCE(${data.description ?? null}, description),
+    UPDATE projects
+    SET
+      name = ${name},
+      description = ${description},
+      status = ${status},
+      priority = ${priority},
+      visibility = ${visibility},
+      color = ${color},
+      icon_url = ${icon_url},
+      banner_url = ${banner_url},
+      start_date = ${start_date},
+      end_date = ${end_date},
+      owner_id = ${owner_id},
       updated_at = NOW()
     WHERE id = ${id}
     RETURNING *
   `
   return (rows[0] as unknown as Project) || null
+}
+
+export async function deleteProject(id: number): Promise<void> {
+  await sql`DELETE FROM projects WHERE id = ${id}`
 }
 
 // ============================================

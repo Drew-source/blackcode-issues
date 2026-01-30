@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
+import { format, parseISO } from 'date-fns'
 import {
   BarChart3,
   TrendingUp,
@@ -12,6 +13,16 @@ import {
   CheckCircle2,
   Clock,
 } from 'lucide-react'
+
+// Format ISO date string to "Jan 24" format
+function formatDateLabel(dateStr: string): string {
+  try {
+    const date = parseISO(dateStr)
+    return format(date, 'MMM d')
+  } catch {
+    return dateStr
+  }
+}
 
 const STATUS_COLORS: Record<string, string> = {
   backlog: 'bg-gray-500',
@@ -301,18 +312,18 @@ export default function AnalyticsPage() {
                         <div
                           key={item.date}
                           className="flex-1 bg-primary rounded-t transition-all hover:bg-primary/80"
-                          style={{ height: `${height}%` }}
-                          title={`${item.date}: ${item.count} issues`}
+                          style={{ height: `${Math.max(height, 2)}%` }}
+                          title={`${formatDateLabel(item.date)}: ${item.count} issues`}
                         />
                       )
                     })}
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2">
                     <span>
-                      {analytics.issuesOverTime[0]?.date || ''}
+                      {analytics.issuesOverTime[0]?.date ? formatDateLabel(analytics.issuesOverTime[0].date) : ''}
                     </span>
                     <span>
-                      {analytics.issuesOverTime[analytics.issuesOverTime.length - 1]?.date || ''}
+                      {analytics.issuesOverTime[analytics.issuesOverTime.length - 1]?.date ? formatDateLabel(analytics.issuesOverTime[analytics.issuesOverTime.length - 1].date) : ''}
                     </span>
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import { signIn, getSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -36,23 +37,17 @@ export default function LoginPage() {
         <div className="bg-card rounded-2xl shadow-2xl border border-border p-8">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-2xl mb-4">
-              <svg
-                className="w-8 h-8 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 overflow-hidden">
+              <Image
+                src="/logo.png"
+                alt="blackcode issues"
+                width={64}
+                height={64}
+                className="rounded-2xl"
+              />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
-              Blackcode Issues
+              blackcode issues
             </h1>
             <p className="text-muted-foreground mt-2">
               AI-native issue tracking

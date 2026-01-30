@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export function LandingPage() {
   return (
@@ -18,10 +19,14 @@ export function LandingPage() {
         <header className="border-b border-border/50 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">B</span>
-              </div>
-              <span className="font-bold text-lg">Blackcode Issues</span>
+              <Image
+                src="/logo.png"
+                alt="blackcode issues"
+                width={32}
+                height={32}
+                className="rounded-lg"
+              />
+              <span className="font-bold text-lg">blackcode issues</span>
             </div>
             <Link
               href="/login"

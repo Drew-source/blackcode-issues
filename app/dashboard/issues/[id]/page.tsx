@@ -22,6 +22,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { RichTextEditor, RichTextDisplay } from '@/components/rich-text-editor'
+import { useImageLightbox } from '@/components/image-lightbox'
 
 const STATUSES = [
   { id: 'backlog', label: 'Backlog' },
@@ -150,6 +151,9 @@ export default function IssueDetailPage() {
   const [showActivity, setShowActivity] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
 
+  // Image lightbox for viewing images in full size
+  const { openLightbox, LightboxComponent } = useImageLightbox()
+
   const issueId = parseInt(params.id as string)
 
   // Fetch issue
@@ -204,6 +208,18 @@ export default function IssueDetailPage() {
     enabled: !!issue?.project_id,
   })
 
+  // Fetch milestones for the project
+  const { data: milestones = [] } = useQuery({
+    queryKey: ['milestones', issue?.project_id],
+    queryFn: async () => {
+      if (!issue?.project_id) return []
+      const res = await fetch(`/api/milestones?project_id=${issue.project_id}`)
+      if (!res.ok) return []
+      return res.json()
+    },
+    enabled: !!issue?.project_id,
+  })
+
   const updateIssue = useMutation({
     mutationFn: async (data: Partial<Issue>) => {
       const res = await fetch(`/api/issues/${issueId}`, {
@@ -219,6 +235,8 @@ export default function IssueDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['all-issues'] })
       queryClient.invalidateQueries({ queryKey: ['activity', issueId] })
       queryClient.invalidateQueries({ queryKey: ['kanban', issue?.project_id] })
+      queryClient.invalidateQueries({ queryKey: ['all-milestones'] })
+      queryClient.invalidateQueries({ queryKey: ['milestone'] })
       // No toast for inline updates - smoother UX
     },
     onError: () => {
@@ -487,7 +505,7 @@ export default function IssueDetailPage() {
                   title="Click to edit"
                 >
                   {issue.description ? (
-                    <RichTextDisplay content={issue.description} />
+                    <RichTextDisplay content={issue.description} onImageClick={openLightbox} />
                   ) : (
                     <p className="text-sm text-muted-foreground italic">
                       Click to add a description...
@@ -627,7 +645,7 @@ export default function IssueDetailPage() {
                           </div>
                           {item.type === 'comment' ? (
                             <div className="text-sm bg-secondary/50 rounded-lg p-3">
-                              <RichTextDisplay content={item.content || ''} />
+                              <RichTextDisplay content={item.content || ''} onImageClick={openLightbox} />
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground">
@@ -756,15 +774,24 @@ export default function IssueDetailPage() {
               />
             </div>
 
-            {/* Milestone */}
-            {issue.milestone_name && (
-              <div className="bg-card rounded-lg border border-border p-4">
-                <label className="block text-xs font-medium text-muted-foreground mb-2">
-                  Milestone
-                </label>
-                <span className="text-sm">{issue.milestone_name}</span>
-              </div>
-            )}
+            {/* Milestone - Inline select */}
+            <div className="bg-card rounded-lg border border-border p-4">
+              <label className="block text-xs font-medium text-muted-foreground mb-2">
+                Milestone
+              </label>
+              <select
+                value={issue.milestone_id || ''}
+                onChange={(e) => updateIssue.mutate({ milestone_id: e.target.value ? parseInt(e.target.value) : null } as any)}
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer hover:border-primary transition-colors"
+              >
+                <option value="">No milestone</option>
+                {milestones.map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Metadata */}
             <div className="bg-card rounded-lg border border-border p-4 space-y-2">
@@ -788,6 +815,9 @@ export default function IssueDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Image Lightbox */}
+      {LightboxComponent}
     </div>
   )
 }

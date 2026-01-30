@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   Search,
   LayoutGrid,
+  List,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +29,7 @@ import {
   GanttChartSquare,
   Users,
   X,
+  Settings,
 } from 'lucide-react'
 import { ProjectMembersPanel } from './project-members-panel'
 
@@ -95,12 +97,14 @@ export function GanttView({
   user,
   view = 'timeline',
   onViewChange,
+  onOpenSettings,
 }: {
   project: Project
   issues: Issue[]
   user: User
-  view?: 'kanban' | 'timeline'
-  onViewChange?: (view: 'kanban' | 'timeline') => void
+  view?: 'kanban' | 'timeline' | 'list'
+  onViewChange?: (view: 'kanban' | 'timeline' | 'list') => void
+  onOpenSettings?: () => void
 }) {
   // Ensure issues is always an array (handle edge cases where it might be object/null)
   const issues = useMemo(() => {
@@ -410,6 +414,17 @@ export function GanttView({
                   Kanban
                 </button>
                 <button
+                  onClick={() => onViewChange('list')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    view === 'list'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <List size={16} className="inline mr-1.5" />
+                  List
+                </button>
+                <button
                   onClick={() => onViewChange('timeline')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     view === 'timeline'
@@ -520,6 +535,17 @@ export function GanttView({
               <Users size={16} />
               Team
             </button>
+
+            {/* Settings */}
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="p-2 bg-background border border-input rounded-lg hover:bg-secondary transition-colors"
+                title="Project Settings"
+              >
+                <Settings size={16} />
+              </button>
+            )}
           </div>
         </div>
       </header>

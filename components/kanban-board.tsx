@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Plus,
@@ -26,6 +27,9 @@ import {
   LayoutGrid,
   List,
   Users,
+  ExternalLink,
+  Settings,
+  GanttChartSquare,
 } from 'lucide-react'
 import { ProjectMembersPanel } from './project-members-panel'
 import { CreateIssueModal } from './create-issue-modal'
@@ -84,18 +88,28 @@ interface User {
   image?: string | null
 }
 
+interface UndoAction {
+  type: 'status_change'
+  issueId: number
+  previousStatus: string
+  newStatus: string
+  timestamp: number
+}
+
 export function KanbanBoard({
   project,
   initialKanban,
   user,
   view = 'kanban',
   onViewChange,
+  onOpenSettings,
 }: {
   project: Project
   initialKanban: KanbanData
   user: User
-  view?: 'kanban' | 'timeline'
-  onViewChange?: (view: 'kanban' | 'timeline') => void
+  view?: 'kanban' | 'timeline' | 'list'
+  onViewChange?: (view: 'kanban' | 'timeline' | 'list') => void
+  onOpenSettings?: () => void
 }) {
   const [kanban, setKanban] = useState<KanbanData>(initialKanban)
   const [searchQuery, setSearchQuery] = useState('')
@@ -107,6 +121,8 @@ export function KanbanBoard({
   const [showMembersPanel, setShowMembersPanel] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState<number | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all') // 'all', 'unassigned', or specific user id
+  const [undoStack, setUndoStack] = useState<UndoAction[]>([])
+  const isUndoing = useRef(false)
   const queryClient = useQueryClient()
   
   // Fetch project members for filter dropdown
@@ -225,7 +241,7 @@ export function KanbanBoard({
       const newKanban = { ...prev }
       const sourceItems = [...(newKanban[sourceStatus] || [])]
       const destItems = sourceStatus === destStatus ? sourceItems : [...(newKanban[destStatus] || [])]
-      
+
       const [movedItem] = sourceItems.splice(source.index, 1)
       movedItem.status = destStatus
       destItems.splice(destination.index, 0, movedItem)
@@ -238,11 +254,70 @@ export function KanbanBoard({
       return newKanban
     })
 
-    // Update server
+    // Update server and track for undo (only if not undoing)
     if (sourceStatus !== destStatus) {
       updateIssueStatus.mutate({ issueId, status: destStatus })
+
+      // Add to undo stack only if this is not an undo operation
+      if (!isUndoing.current) {
+        setUndoStack((prev) => [
+          ...prev.slice(-9), // Keep last 10 actions
+          {
+            type: 'status_change',
+            issueId,
+            previousStatus: sourceStatus,
+            newStatus: destStatus,
+            timestamp: Date.now(),
+          },
+        ])
+      }
     }
   }, [updateIssueStatus])
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return
+
+    const lastAction = undoStack[undoStack.length - 1]
+
+    // Mark that we're undoing to prevent adding this to undo stack
+    isUndoing.current = true
+
+    // Optimistically update local state
+    setKanban((prev) => {
+      const newKanban = { ...prev }
+      const sourceItems = [...(newKanban[lastAction.newStatus] || [])]
+      const destItems = [...(newKanban[lastAction.previousStatus] || [])]
+
+      const issueIndex = sourceItems.findIndex((i) => i.id === lastAction.issueId)
+      if (issueIndex !== -1) {
+        const [movedItem] = sourceItems.splice(issueIndex, 1)
+        movedItem.status = lastAction.previousStatus
+        destItems.push(movedItem)
+
+        newKanban[lastAction.newStatus] = sourceItems
+        newKanban[lastAction.previousStatus] = destItems
+      }
+
+      return newKanban
+    })
+
+    // Update server
+    updateIssueStatus.mutate(
+      { issueId: lastAction.issueId, status: lastAction.previousStatus },
+      {
+        onSettled: () => {
+          isUndoing.current = false
+        },
+      }
+    )
+
+    // Remove from undo stack
+    setUndoStack((prev) => prev.slice(0, -1))
+
+    toast.success('Action undone', {
+      description: `Issue moved back to ${STATUSES.find((s) => s.id === lastAction.previousStatus)?.label}`,
+    })
+  }, [undoStack, updateIssueStatus])
 
   // Filter issues by search query, priority, and assignee
   const filterIssues = (issues: Issue[]) => {
@@ -314,6 +389,17 @@ export function KanbanBoard({
                     Kanban
                   </button>
                   <button
+                    onClick={() => onViewChange('list')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      view === 'list'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <List size={16} className="inline mr-1.5" />
+                    List
+                  </button>
+                  <button
                     onClick={() => onViewChange('timeline')}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       view === 'timeline'
@@ -321,8 +407,8 @@ export function KanbanBoard({
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <List size={16} className="inline mr-1.5" />
-                    Timeline
+                    <GanttChartSquare size={16} className="inline mr-1.5" />
+                    Gantt
                   </button>
                 </div>
               )}
@@ -420,10 +506,35 @@ export function KanbanBoard({
                 Team
               </button>
 
-              {/* Rollback */}
-              <button className="flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm hover:bg-secondary transition-colors text-muted-foreground">
+              {/* Settings */}
+              {onOpenSettings && (
+                <button
+                  onClick={onOpenSettings}
+                  className="p-2 bg-background border border-input rounded-lg hover:bg-secondary transition-colors"
+                  title="Project Settings"
+                >
+                  <Settings size={16} />
+                </button>
+              )}
+
+              {/* Undo */}
+              <button
+                onClick={handleUndo}
+                disabled={undoStack.length === 0}
+                className={`flex items-center gap-2 px-3 py-2 bg-background border border-input rounded-lg text-sm transition-colors ${
+                  undoStack.length > 0
+                    ? 'hover:bg-secondary text-foreground'
+                    : 'text-muted-foreground/50 cursor-not-allowed'
+                }`}
+                title={undoStack.length > 0 ? `Undo (${undoStack.length} action${undoStack.length > 1 ? 's' : ''})` : 'Nothing to undo'}
+              >
                 <Undo2 size={16} />
                 Undo
+                {undoStack.length > 0 && (
+                  <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded-full">
+                    {undoStack.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -888,8 +999,14 @@ function IssueDetailModal({
   issue: Issue
   onClose: () => void
 }) {
+  const router = useRouter()
   const priority = PRIORITY_CONFIG[issue.priority as keyof typeof PRIORITY_CONFIG]
   const status = STATUSES.find((s) => s.id === issue.status)
+
+  const handleOpenFullPage = () => {
+    onClose()
+    router.push(`/dashboard/issues/${issue.id}`)
+  }
 
   return (
     <>
@@ -915,12 +1032,22 @@ function IssueDetailModal({
             <span className="text-sm font-mono text-muted-foreground">
               #{issue.id}
             </span>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenFullPage}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
+                title="Open full page"
+              >
+                <ExternalLink size={16} />
+                Open
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
         </div>
 

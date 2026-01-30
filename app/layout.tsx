@@ -6,10 +6,10 @@ import { Toaster } from 'sonner'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Blackcode Issues - AI-Native Issue Tracking',
+  title: 'blackcode issues - AI-Native Issue Tracking',
   description: 'Trinity Architecture: Prompt → Tools → Software',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/logo.png',
   },
 }
 

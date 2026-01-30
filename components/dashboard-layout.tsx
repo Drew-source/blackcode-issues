@@ -34,10 +34,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Logo */}
         <div className="p-4 border-b border-border">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">B</span>
-            </div>
-            <span className="font-bold">Blackcode Issues</span>
+            <Image
+              src="/logo.png"
+              alt="blackcode issues"
+              width={32}
+              height={32}
+              className="rounded-lg"
+            />
+            <span className="font-bold">blackcode issues</span>
           </Link>
         </div>
 
@@ -107,12 +111,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             >
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button
+            <Link
+              href="/dashboard/settings"
               className="p-2 hover:bg-secondary rounded-lg transition-colors"
               title="Settings"
             >
               <Settings size={18} />
-            </button>
+            </Link>
             <button
               onClick={() => signOut()}
               className="p-2 hover:bg-secondary rounded-lg transition-colors text-destructive"

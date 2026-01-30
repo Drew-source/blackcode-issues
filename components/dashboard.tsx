@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import {
   Plus,
   ChevronRight,
+  ChevronDown,
   LayoutGrid,
   X,
   Upload,
@@ -73,8 +74,12 @@ export function Dashboard({ user }: { user: User }) {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">Projects</h1>
-          <p className="text-muted-foreground mt-1">
-            {projects.length} project{projects.length !== 1 ? 's' : ''}
+          <p className="text-muted-foreground mt-1" data-loading={isLoading || undefined}>
+            {isLoading ? (
+              <span className="inline-block h-4 w-24 bg-muted animate-pulse rounded" />
+            ) : (
+              `${projects.length} project${projects.length !== 1 ? 's' : ''}`
+            )}
           </p>
         </div>
         <button
@@ -88,7 +93,11 @@ export function Dashboard({ user }: { user: User }) {
 
       {/* Projects grid */}
       {isLoading ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div data-loading="true" className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="col-span-full text-center py-8">
+            <div className="inline-flex items-center justify-center w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-muted-foreground">Loading projects...</p>
+          </div>
           {[...Array(6)].map((_, i) => (
             <div
               key={i}
@@ -175,7 +184,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
         {/* Content */}
         <div className="p-4">
           {/* Header row with logo */}
-          <div className="flex items-start justify-between mb-3 -mt-8">
+          <div className="flex items-start mb-3 -mt-8">
             <div className="flex items-center gap-3">
               <div
                 className="w-12 h-12 rounded-xl border-4 border-card shadow-lg flex items-center justify-center text-white font-bold text-lg"
@@ -195,20 +204,6 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                setExpanded(!expanded)
-              }}
-              className="mt-4 p-1.5 hover:bg-secondary rounded-lg transition-colors"
-            >
-              <motion.div
-                animate={{ rotate: expanded ? 90 : 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ChevronRight size={16} className="text-muted-foreground" />
-              </motion.div>
-            </button>
           </div>
 
           {/* Description */}
@@ -247,6 +242,25 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
             <ChevronRight size={14} />
           </Link>
         </div>
+
+        {/* Expand indicator at bottom */}
+        <button
+          onClick={(e) => {
+            e.preventDefault()
+            setExpanded(!expanded)
+          }}
+          className="w-full py-2 flex items-center justify-center gap-1 border-t border-border hover:bg-secondary/50 transition-colors group"
+        >
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ChevronDown size={14} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+          </motion.div>
+          <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+            {expanded ? 'Show less' : 'Show more'}
+          </span>
+        </button>
 
         {/* Expandable section */}
         <AnimatePresence>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getProject, updateProject, isProjectMember, getProjectMemberRole } from '@/lib/db'
+import { getProject, updateProject, deleteProject, isProjectMember, getProjectMemberRole } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
@@ -92,6 +92,46 @@ export async function PATCH(
     console.error('Failed to update project:', error)
     return NextResponse.json(
       { error: 'Failed to update project' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id: idStr } = await params
+    const id = parseInt(idStr)
+    if (isNaN(id)) {
+      return NextResponse.json(
+        { error: 'Invalid ID', suggestion: 'ID must be an integer' },
+        { status: 400 }
+      )
+    }
+
+    // Check if user has owner role (only owners can delete projects)
+    const role = await getProjectMemberRole(id, session.user.id)
+    if (role !== 'owner') {
+      return NextResponse.json(
+        { error: 'Forbidden', suggestion: 'Only project owners can delete projects' },
+        { status: 403 }
+      )
+    }
+
+    await deleteProject(id)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Failed to delete project:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete project' },
       { status: 500 }
     )
   }

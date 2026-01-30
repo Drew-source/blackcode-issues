@@ -22,6 +22,8 @@ import {
   List,
   MessageSquare,
   Paperclip,
+  Plus,
+  X,
 } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 
@@ -106,6 +108,8 @@ export default function MilestoneDetailPage() {
   const [editedDescription, setEditedDescription] = useState('')
   const [editedDueDate, setEditedDueDate] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [showAddIssues, setShowAddIssues] = useState(false)
+  const [addIssueSearch, setAddIssueSearch] = useState('')
 
   // Fetch milestone with issues
   const { data: milestone, isLoading } = useQuery<Milestone>({
@@ -116,6 +120,31 @@ export default function MilestoneDetailPage() {
       return res.json()
     },
   })
+
+  // Fetch all issues from the same project (for adding to milestone)
+  const { data: projectIssues = [] } = useQuery<Issue[]>({
+    queryKey: ['project-issues', milestone?.project_id],
+    queryFn: async () => {
+      if (!milestone?.project_id) return []
+      const res = await fetch(`/api/issues?project_id=${milestone.project_id}`)
+      if (!res.ok) return []
+      return res.json()
+    },
+    enabled: !!milestone?.project_id && showAddIssues,
+  })
+
+  // Issues available to add (not already in milestone)
+  const availableIssues = useMemo(() => {
+    if (!projectIssues.length) return []
+    const milestoneIssueIds = new Set(milestone?.issues?.map((i) => i.id) || [])
+    return projectIssues
+      .filter((issue) => !milestoneIssueIds.has(issue.id) && !issue.milestone_id)
+      .filter((issue) => {
+        if (!addIssueSearch) return true
+        const query = addIssueSearch.toLowerCase()
+        return issue.title.toLowerCase().includes(query) || issue.id.toString().includes(query)
+      })
+  }, [projectIssues, milestone?.issues, addIssueSearch])
 
   // Initialize edit form when milestone loads
   useEffect(() => {
@@ -165,6 +194,49 @@ export default function MilestoneDetailPage() {
     },
     onError: () => {
       toast.error('Failed to update issue')
+    },
+  })
+
+  // Add issue to milestone mutation
+  const addIssueToMilestone = useMutation({
+    mutationFn: async (issueId: number) => {
+      const res = await fetch(`/api/issues/${issueId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestone_id: milestoneId }),
+      })
+      if (!res.ok) throw new Error('Failed to add issue to milestone')
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['milestone', milestoneId] })
+      queryClient.invalidateQueries({ queryKey: ['all-milestones'] })
+      queryClient.invalidateQueries({ queryKey: ['project-issues', milestone?.project_id] })
+      toast.success('Issue added to milestone!')
+    },
+    onError: () => {
+      toast.error('Failed to add issue')
+    },
+  })
+
+  // Remove issue from milestone mutation
+  const removeIssueFromMilestone = useMutation({
+    mutationFn: async (issueId: number) => {
+      const res = await fetch(`/api/issues/${issueId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ milestone_id: null }),
+      })
+      if (!res.ok) throw new Error('Failed to remove issue from milestone')
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['milestone', milestoneId] })
+      queryClient.invalidateQueries({ queryKey: ['all-milestones'] })
+      toast.success('Issue removed from milestone!')
+    },
+    onError: () => {
+      toast.error('Failed to remove issue')
     },
   })
 
@@ -342,6 +414,13 @@ export default function MilestoneDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddIssues(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90"
+              >
+                <Plus size={16} />
+                Add Issues
+              </button>
               {isEditing ? (
                 <>
                   <button
@@ -623,19 +702,119 @@ export default function MilestoneDetailPage() {
             </p>
           </div>
         ) : viewMode === 'list' ? (
-          <ListView issues={filteredIssues} />
+          <ListView issues={filteredIssues} onRemove={(id) => removeIssueFromMilestone.mutate(id)} />
         ) : viewMode === 'kanban' ? (
           <KanbanView kanbanData={kanbanData} onDragEnd={handleDragEnd} />
         ) : (
           <GanttViewEmbedded issues={filteredIssues} milestone={milestone} />
         )}
       </main>
+
+      {/* Add Issues Modal */}
+      {showAddIssues && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              setShowAddIssues(false)
+              setAddIssueSearch('')
+            }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed inset-0 flex items-center justify-center z-50 p-4"
+          >
+            <div
+              className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg max-h-[70vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h2 className="text-lg font-semibold">Add Issues to Milestone</h2>
+                <button
+                  onClick={() => {
+                    setShowAddIssues(false)
+                    setAddIssueSearch('')
+                  }}
+                  className="p-1.5 hover:bg-secondary rounded-lg transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="p-4 border-b border-border">
+                <div className="relative">
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search issues..."
+                    value={addIssueSearch}
+                    onChange={(e) => setAddIssueSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Issue list */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {availableIssues.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    {addIssueSearch
+                      ? 'No matching issues found'
+                      : 'All issues are already in a milestone'}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableIssues.map((issue) => {
+                      const priority = PRIORITY_CONFIG[issue.priority as keyof typeof PRIORITY_CONFIG]
+                      const status = STATUS_CONFIG[issue.status]
+                      return (
+                        <button
+                          key={issue.id}
+                          onClick={() => addIssueToMilestone.mutate(issue.id)}
+                          disabled={addIssueToMilestone.isPending}
+                          className="w-full text-left p-3 bg-secondary/30 hover:bg-secondary rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono text-muted-foreground">#{issue.id}</span>
+                            <span className="flex-1 text-sm font-medium truncate">{issue.title}</span>
+                            <span className={`text-xs ${status?.color}`}>{status?.label}</span>
+                            {priority && (
+                              <span className={`text-xs ${priority.color}`}>{priority.label}</span>
+                            )}
+                            <Plus size={16} className="text-muted-foreground" />
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 py-3 border-t border-border text-xs text-muted-foreground">
+                {availableIssues.length} issue{availableIssues.length !== 1 ? 's' : ''} available to add
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
     </div>
   )
 }
 
 // List View Component
-function ListView({ issues }: { issues: Issue[] }) {
+function ListView({ issues, onRemove }: { issues: Issue[]; onRemove: (id: number) => void }) {
   return (
     <div className="space-y-2">
       {issues.map((issue) => {
@@ -643,14 +822,18 @@ function ListView({ issues }: { issues: Issue[] }) {
         const status = STATUS_CONFIG[issue.status]
 
         return (
-          <Link
+          <div
             key={issue.id}
-            href={`/dashboard/issues/${issue.id}`}
-            className="block bg-card rounded-lg border border-border p-4 hover:border-primary/50 transition-all"
+            className="bg-card rounded-lg border border-border p-4 hover:border-primary/50 transition-all group"
           >
             <div className="flex items-center gap-4">
               <span className="text-xs font-mono text-muted-foreground">#{issue.id}</span>
-              <h3 className="font-medium flex-1">{issue.title}</h3>
+              <Link
+                href={`/dashboard/issues/${issue.id}`}
+                className="font-medium flex-1 hover:text-primary transition-colors"
+              >
+                {issue.title}
+              </Link>
               <span className={`status-badge status-${issue.status}`}>{status?.label}</span>
               {priority && (
                 <span className={`text-xs px-2 py-0.5 rounded-full ${priority.bg} ${priority.color}`}>
@@ -688,8 +871,21 @@ function ListView({ issues }: { issues: Issue[] }) {
                   </span>
                 )}
               </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (confirm('Remove this issue from the milestone?')) {
+                    onRemove(issue.id)
+                  }
+                }}
+                className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-red-500 rounded transition-all"
+                title="Remove from milestone"
+              >
+                <X size={16} />
+              </button>
             </div>
-          </Link>
+          </div>
         )
       })}
     </div>
