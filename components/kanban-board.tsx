@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { ProjectMembersPanel } from './project-members-panel'
 import { CreateIssueModal } from './create-issue-modal'
+import { RichTextEditor, RichTextDisplay } from './rich-text-editor'
 import { formatDistanceToNow } from 'date-fns'
 
 // Status configuration
@@ -1004,10 +1005,11 @@ function IssueDetailModal({
 
   // Local state for editing
   const [title, setTitle] = useState(issue.title)
-  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [description, setDescription] = useState(issue.description || '')
   const [status, setStatus] = useState(issue.status)
   const [priority, setPriority] = useState(issue.priority)
   const [assigneeId, setAssigneeId] = useState<number | undefined>(issue.assignee_id)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Fetch project members for assignee dropdown
   const { data: members = [] } = useQuery({
@@ -1033,12 +1035,29 @@ function IssueDetailModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-issues'] })
       queryClient.invalidateQueries({ queryKey: ['all-issues'] })
-      toast.success('Issue updated')
     },
     onError: () => {
       toast.error('Failed to update issue')
     },
   })
+
+  // Image upload handler for rich text editor
+  const handleImageUpload = async (file: File): Promise<string> => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!res.ok) {
+      throw new Error('Failed to upload image')
+    }
+
+    const data = await res.json()
+    return data.url
+  }
 
   const handleStatusChange = (newStatus: string) => {
     setStatus(newStatus)
@@ -1055,11 +1074,20 @@ function IssueDetailModal({
     updateIssue.mutate({ assignee_id: newAssigneeId || null } as any)
   }
 
-  const handleTitleSave = () => {
-    if (title.trim() && title !== issue.title) {
-      updateIssue.mutate({ title: title.trim() })
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      await updateIssue.mutateAsync({
+        title: title.trim(),
+        description: description,
+      })
+      toast.success('Issue saved')
+      onClose()
+    } catch {
+      // Error handled by mutation
+    } finally {
+      setIsSaving(false)
     }
-    setIsEditingTitle(false)
   }
 
   const handleOpenFullPage = () => {
@@ -1068,7 +1096,6 @@ function IssueDetailModal({
   }
 
   const priorityConfig = PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG]
-  const statusConfig = STATUSES.find((s) => s.id === status)
 
   return (
     <>
@@ -1081,19 +1108,22 @@ function IssueDetailModal({
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
       />
 
-      {/* Modal */}
+      {/* Modal - Full screen on mobile, large centered modal on desktop */}
       <motion.div
-        initial={{ opacity: 0, x: 100 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 100 }}
-        className="fixed right-0 top-0 h-full w-full max-w-xl bg-card border-l border-border shadow-2xl z-50 overflow-y-auto"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="fixed inset-4 md:inset-8 lg:inset-16 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col"
       >
         {/* Header */}
-        <div className="sticky top-0 bg-card/80 backdrop-blur border-b border-border px-6 py-4">
+        <div className="flex-shrink-0 bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-mono text-muted-foreground">
-              #{issue.id}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
+                #{issue.id}
+              </span>
+              <span className="text-sm text-muted-foreground">Edit Issue</span>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleOpenFullPage}
@@ -1101,7 +1131,7 @@ function IssueDetailModal({
                 title="Open full page"
               >
                 <ExternalLink size={16} />
-                Open
+                Full Page
               </button>
               <button
                 onClick={onClose}
@@ -1113,115 +1143,122 @@ function IssueDetailModal({
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
-          {/* Editable Title */}
-          {isEditingTitle ? (
-            <input
-              autoFocus
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleTitleSave()
-                if (e.key === 'Escape') {
-                  setTitle(issue.title)
-                  setIsEditingTitle(false)
-                }
-              }}
-              className="text-2xl font-bold mb-6 w-full bg-transparent border-b-2 border-primary focus:outline-none"
-            />
-          ) : (
-            <h1
-              onClick={() => setIsEditingTitle(true)}
-              className="text-2xl font-bold mb-6 cursor-pointer hover:bg-secondary/50 rounded px-1 -mx-1 transition-colors"
-              title="Click to edit"
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-6">
+            {/* Main content - 2 columns */}
+            <div className="md:col-span-2 space-y-6">
+              {/* Title Input */}
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  Title
+                </label>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Issue title..."
+                  className="w-full px-4 py-3 text-xl font-semibold bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              {/* Description with Rich Text Editor */}
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  Description
+                </label>
+                <div className="border border-input rounded-lg overflow-hidden">
+                  <RichTextEditor
+                    content={description}
+                    onChange={setDescription}
+                    placeholder="Add a description... Paste images directly or use the toolbar for formatting."
+                    onImageUpload={handleImageUpload}
+                    minHeight="250px"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar - 1 column */}
+            <div className="space-y-4">
+              {/* Status */}
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Priority</label>
+                <select
+                  value={priority}
+                  onChange={(e) => handlePriorityChange(parseInt(e.target.value))}
+                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                >
+                  <option value={1}>Urgent</option>
+                  <option value={2}>High</option>
+                  <option value={3}>Medium</option>
+                  <option value={4}>Low</option>
+                </select>
+              </div>
+
+              {/* Assignee */}
+              <div>
+                <label className="block text-sm text-muted-foreground mb-1.5">Assignee</label>
+                <select
+                  value={assigneeId || ''}
+                  onChange={(e) => handleAssigneeChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                  className="w-full bg-background border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m: any) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name || m.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Meta info */}
+              <div className="pt-4 border-t border-border text-sm text-muted-foreground space-y-2">
+                <div className="flex justify-between">
+                  <span>Created</span>
+                  <span>{formatDistanceToNow(new Date(issue.created_at))} ago</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Comments</span>
+                  <span>{issue.comment_count}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer with Save/Cancel */}
+        <div className="flex-shrink-0 bg-card border-t border-border px-6 py-4">
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors"
             >
-              {title}
-            </h1>
-          )}
-
-          {/* Editable Properties */}
-          <div className="space-y-4 mb-8">
-            {/* Status Dropdown */}
-            <div className="flex items-center justify-between py-2 border-b border-border">
-              <span className="text-sm text-muted-foreground">Status</span>
-              <select
-                value={status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="bg-secondary/50 border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Priority Dropdown */}
-            <div className="flex items-center justify-between py-2 border-b border-border">
-              <span className="text-sm text-muted-foreground">Priority</span>
-              <select
-                value={priority}
-                onChange={(e) => handlePriorityChange(parseInt(e.target.value))}
-                className={`bg-secondary/50 border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer ${priorityConfig?.color || ''}`}
-              >
-                <option value={1}>Urgent</option>
-                <option value={2}>High</option>
-                <option value={3}>Medium</option>
-                <option value={4}>Low</option>
-              </select>
-            </div>
-
-            {/* Assignee Dropdown */}
-            <div className="flex items-center justify-between py-2 border-b border-border">
-              <span className="text-sm text-muted-foreground">Assignee</span>
-              <select
-                value={assigneeId || ''}
-                onChange={(e) => handleAssigneeChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                className="bg-secondary/50 border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-              >
-                <option value="">Unassigned</option>
-                {members.map((m: any) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name || m.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Created (read-only) */}
-            <div className="flex items-center justify-between py-2 border-b border-border">
-              <span className="text-sm text-muted-foreground">Created</span>
-              <span className="text-sm text-muted-foreground">
-                {formatDistanceToNow(new Date(issue.created_at))} ago
-              </span>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div className="mb-8">
-            <h3 className="text-sm font-medium mb-2">Description</h3>
-            {issue.description ? (
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-secondary/30 rounded-lg p-3">
-                {issue.description}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground/50 italic">
-                No description. Click &quot;Open&quot; to add one.
-              </p>
-            )}
-          </div>
-
-          {/* Comments */}
-          <div>
-            <h3 className="text-sm font-medium mb-4">
-              Comments ({issue.comment_count})
-            </h3>
-            <div className="bg-secondary/50 rounded-lg p-4 text-center text-sm text-muted-foreground">
-              Click &quot;Open&quot; to view and add comments
-            </div>
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !title.trim()}
+              className="px-6 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
           </div>
         </div>
       </motion.div>
