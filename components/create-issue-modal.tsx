@@ -290,8 +290,9 @@ export function CreateIssueModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-3xl md:max-h-[90vh] bg-card rounded-2xl border border-border shadow-2xl z-50 flex flex-col overflow-hidden"
+        className="fixed inset-0 flex items-center justify-center z-50 p-4"
       >
+        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <h2 className="text-xl font-bold">Create New Issue</h2>
@@ -556,6 +557,7 @@ export function CreateIssueModal({
             </button>
           </div>
         </form>
+        </div>
       </motion.div>
     </>
   )
