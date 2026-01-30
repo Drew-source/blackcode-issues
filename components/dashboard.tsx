@@ -1,14 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import Image from 'next/image'
 import { toast } from 'sonner'
 import {
   Plus,
   ChevronRight,
   LayoutGrid,
+  X,
+  Upload,
+  Globe,
+  Users,
+  Lock,
+  Check,
 } from 'lucide-react'
 
 interface User {
@@ -186,6 +193,24 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
   )
 }
 
+const PRIORITY_OPTIONS = [
+  { id: 'P0', label: 'P0 - Critical', color: 'bg-red-500' },
+  { id: 'P1', label: 'P1 - High', color: 'bg-amber-500' },
+  { id: 'P2', label: 'P2 - Medium', color: 'bg-blue-500' },
+  { id: 'P3', label: 'P3 - Low', color: 'bg-gray-500' },
+] as const
+
+const VISIBILITY_OPTIONS = [
+  { id: 'private', label: 'Private', description: 'Only you can see', icon: Lock },
+  { id: 'team', label: 'Team', description: 'Team members can access', icon: Users },
+  { id: 'public', label: 'Public', description: 'Anyone can view', icon: Globe },
+] as const
+
+const COLOR_PRESETS = [
+  '#EF4444', '#F97316', '#EAB308', '#22C55E', '#14B8A6',
+  '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#6B7280',
+]
+
 function NewProjectModal({
   onClose,
   onCreate,
@@ -197,6 +222,31 @@ function NewProjectModal({
 }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState('P2')
+  const [visibility, setVisibility] = useState('team')
+  const [color, setColor] = useState('#3B82F6')
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
+
+  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (e) => setLogoPreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (e) => setBannerPreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
 
   return (
     <>
@@ -216,21 +266,77 @@ function NewProjectModal({
         exit={{ opacity: 0, scale: 0.95 }}
         className="fixed inset-0 flex items-center justify-center z-50 p-4"
       >
-        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md p-6">
-          <h2 className="text-xl font-bold mb-6">Create New Project</h2>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (name.trim()) {
-                onCreate({ name: name.trim(), description: description.trim() })
-              }
+        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+          {/* Banner preview area */}
+          <div
+            className="h-24 relative flex-shrink-0"
+            style={{
+              background: bannerPreview
+                ? `url(${bannerPreview}) center/cover`
+                : `linear-gradient(135deg, ${color}40, ${color}10)`,
             }}
           >
-            <div className="space-y-4">
+            <input
+              type="file"
+              ref={bannerInputRef}
+              onChange={handleBannerSelect}
+              accept="image/*"
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => bannerInputRef.current?.click()}
+              className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs rounded hover:bg-black/70 transition-colors"
+            >
+              {bannerPreview ? 'Change banner' : 'Add banner'}
+            </button>
+            <button
+              onClick={onClose}
+              className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-lg hover:bg-black/70 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Logo positioned over banner */}
+          <div className="relative px-6 -mt-8">
+            <input
+              type="file"
+              ref={logoInputRef}
+              onChange={handleLogoSelect}
+              accept="image/*"
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              className="w-16 h-16 rounded-xl border-4 border-card bg-card shadow-lg flex items-center justify-center overflow-hidden hover:opacity-80 transition-opacity"
+              style={{ backgroundColor: !logoPreview ? color : undefined }}
+            >
+              {logoPreview ? (
+                <Image src={logoPreview} alt="Logo" width={64} height={64} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-white">{name.charAt(0).toUpperCase() || 'P'}</span>
+              )}
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <form
+              id="new-project-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (name.trim()) {
+                  onCreate({ name: name.trim(), description: description.trim() })
+                }
+              }}
+              className="space-y-5"
+            >
+              {/* Name */}
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Project Name
+                <label className="block text-sm font-medium mb-1.5">
+                  Project Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -242,8 +348,9 @@ function NewProjectModal({
                 />
               </div>
 
+              {/* Description */}
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-1.5">
                   Description
                 </label>
                 <textarea
@@ -254,25 +361,94 @@ function NewProjectModal({
                   className="w-full px-4 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
               </div>
-            </div>
 
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!name.trim() || isLoading}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {isLoading ? 'Creating...' : 'Create Project'}
-              </button>
-            </div>
-          </form>
+              {/* Priority and Color in row */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">
+                    Priority
+                  </label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="w-full px-4 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">
+                    Color
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {COLOR_PRESETS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setColor(c)}
+                        className={`w-6 h-6 rounded-full transition-transform ${
+                          color === c ? 'ring-2 ring-offset-2 ring-offset-card ring-primary scale-110' : 'hover:scale-110'
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Visibility */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Visibility
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {VISIBILITY_OPTIONS.map((v) => {
+                    const Icon = v.icon
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setVisibility(v.id)}
+                        className={`flex flex-col items-center gap-1 p-3 rounded-lg border transition-all ${
+                          visibility === v.id
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-input hover:bg-secondary'
+                        }`}
+                      >
+                        <Icon size={18} />
+                        <span className="text-sm font-medium">{v.label}</span>
+                        <span className="text-[10px] text-muted-foreground">{v.description}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </form>
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-3 px-6 py-4 border-t border-border">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="new-project-form"
+              disabled={!name.trim() || isLoading}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? 'Creating...' : 'Create Project'}
+            </button>
+          </div>
         </div>
       </motion.div>
     </>
