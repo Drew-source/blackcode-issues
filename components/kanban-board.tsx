@@ -1000,13 +1000,75 @@ function IssueDetailModal({
   onClose: () => void
 }) {
   const router = useRouter()
-  const priority = PRIORITY_CONFIG[issue.priority as keyof typeof PRIORITY_CONFIG]
-  const status = STATUSES.find((s) => s.id === issue.status)
+  const queryClient = useQueryClient()
+
+  // Local state for editing
+  const [title, setTitle] = useState(issue.title)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [status, setStatus] = useState(issue.status)
+  const [priority, setPriority] = useState(issue.priority)
+  const [assigneeId, setAssigneeId] = useState<number | undefined>(issue.assignee_id)
+
+  // Fetch project members for assignee dropdown
+  const { data: members = [] } = useQuery({
+    queryKey: ['all-members'],
+    queryFn: async () => {
+      const res = await fetch('/api/users')
+      if (!res.ok) return []
+      return res.json()
+    },
+  })
+
+  // Update issue mutation
+  const updateIssue = useMutation({
+    mutationFn: async (data: Partial<Issue>) => {
+      const res = await fetch(`/api/issues/${issue.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error('Failed to update issue')
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-issues'] })
+      queryClient.invalidateQueries({ queryKey: ['all-issues'] })
+      toast.success('Issue updated')
+    },
+    onError: () => {
+      toast.error('Failed to update issue')
+    },
+  })
+
+  const handleStatusChange = (newStatus: string) => {
+    setStatus(newStatus)
+    updateIssue.mutate({ status: newStatus })
+  }
+
+  const handlePriorityChange = (newPriority: number) => {
+    setPriority(newPriority)
+    updateIssue.mutate({ priority: newPriority })
+  }
+
+  const handleAssigneeChange = (newAssigneeId: number | undefined) => {
+    setAssigneeId(newAssigneeId)
+    updateIssue.mutate({ assignee_id: newAssigneeId || null } as any)
+  }
+
+  const handleTitleSave = () => {
+    if (title.trim() && title !== issue.title) {
+      updateIssue.mutate({ title: title.trim() })
+    }
+    setIsEditingTitle(false)
+  }
 
   const handleOpenFullPage = () => {
     onClose()
     router.push(`/dashboard/issues/${issue.id}`)
   }
+
+  const priorityConfig = PRIORITY_CONFIG[priority as keyof typeof PRIORITY_CONFIG]
+  const statusConfig = STATUSES.find((s) => s.id === status)
 
   return (
     <>
@@ -1053,51 +1115,83 @@ function IssueDetailModal({
 
         {/* Content */}
         <div className="p-6">
-          <h1 className="text-2xl font-bold mb-6">{issue.title}</h1>
+          {/* Editable Title */}
+          {isEditingTitle ? (
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleTitleSave()
+                if (e.key === 'Escape') {
+                  setTitle(issue.title)
+                  setIsEditingTitle(false)
+                }
+              }}
+              className="text-2xl font-bold mb-6 w-full bg-transparent border-b-2 border-primary focus:outline-none"
+            />
+          ) : (
+            <h1
+              onClick={() => setIsEditingTitle(true)}
+              className="text-2xl font-bold mb-6 cursor-pointer hover:bg-secondary/50 rounded px-1 -mx-1 transition-colors"
+              title="Click to edit"
+            >
+              {title}
+            </h1>
+          )}
 
-          {/* Properties */}
+          {/* Editable Properties */}
           <div className="space-y-4 mb-8">
+            {/* Status Dropdown */}
             <div className="flex items-center justify-between py-2 border-b border-border">
               <span className="text-sm text-muted-foreground">Status</span>
-              <span className={`status-badge status-${issue.status}`}>
-                {status?.label}
-              </span>
+              <select
+                value={status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="bg-secondary/50 border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
+            {/* Priority Dropdown */}
             <div className="flex items-center justify-between py-2 border-b border-border">
               <span className="text-sm text-muted-foreground">Priority</span>
-              {priority && (
-                <span className={`text-sm ${priority.color}`}>
-                  {priority.label}
-                </span>
-              )}
+              <select
+                value={priority}
+                onChange={(e) => handlePriorityChange(parseInt(e.target.value))}
+                className={`bg-secondary/50 border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer ${priorityConfig?.color || ''}`}
+              >
+                <option value={1}>Urgent</option>
+                <option value={2}>High</option>
+                <option value={3}>Medium</option>
+                <option value={4}>Low</option>
+              </select>
             </div>
 
-            {issue.assignee_name && (
-              <div className="flex items-center justify-between py-2 border-b border-border">
-                <span className="text-sm text-muted-foreground">Assignee</span>
-                <div className="flex items-center gap-2">
-                  {issue.assignee_avatar && (
-                    <Image
-                      src={issue.assignee_avatar}
-                      alt={issue.assignee_name}
-                      width={20}
-                      height={20}
-                      className="rounded-full"
-                    />
-                  )}
-                  <span className="text-sm">{issue.assignee_name}</span>
-                </div>
-              </div>
-            )}
+            {/* Assignee Dropdown */}
+            <div className="flex items-center justify-between py-2 border-b border-border">
+              <span className="text-sm text-muted-foreground">Assignee</span>
+              <select
+                value={assigneeId || ''}
+                onChange={(e) => handleAssigneeChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                className="bg-secondary/50 border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+              >
+                <option value="">Unassigned</option>
+                {members.map((m: any) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name || m.email}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            {issue.milestone_name && (
-              <div className="flex items-center justify-between py-2 border-b border-border">
-                <span className="text-sm text-muted-foreground">Milestone</span>
-                <span className="text-sm">{issue.milestone_name}</span>
-              </div>
-            )}
-
+            {/* Created (read-only) */}
             <div className="flex items-center justify-between py-2 border-b border-border">
               <span className="text-sm text-muted-foreground">Created</span>
               <span className="text-sm text-muted-foreground">
@@ -1107,14 +1201,18 @@ function IssueDetailModal({
           </div>
 
           {/* Description */}
-          {issue.description && (
-            <div className="mb-8">
-              <h3 className="text-sm font-medium mb-2">Description</h3>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+          <div className="mb-8">
+            <h3 className="text-sm font-medium mb-2">Description</h3>
+            {issue.description ? (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap bg-secondary/30 rounded-lg p-3">
                 {issue.description}
               </p>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground/50 italic">
+                No description. Click &quot;Open&quot; to add one.
+              </p>
+            )}
+          </div>
 
           {/* Comments */}
           <div>
@@ -1122,7 +1220,7 @@ function IssueDetailModal({
               Comments ({issue.comment_count})
             </h3>
             <div className="bg-secondary/50 rounded-lg p-4 text-center text-sm text-muted-foreground">
-              Comments will appear here
+              Click &quot;Open&quot; to view and add comments
             </div>
           </div>
         </div>
