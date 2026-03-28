@@ -46,6 +46,9 @@ export interface Issue {
   estimated_hours?: number
   comment_count?: number
   attachment_count?: number
+  internal_only?: boolean
+  taskhive_task_id?: number
+  taskhive_sync_status?: string
   created_at?: string
   updated_at?: string
 }
