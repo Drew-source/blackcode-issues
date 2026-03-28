@@ -816,6 +816,68 @@ export async function getAttachment(id: number): Promise<Attachment | null> {
 // ACTIVITY HISTORY
 // ============================================
 
+// ============================================
+// TASKHIVE DELIVERABLES
+// ============================================
+
+export async function createTaskHiveDeliverable(data: {
+  issue_id: number
+  taskhive_deliverable_id: number
+  taskhive_task_id: number
+  worker_name?: string
+  worker_rating?: number
+  content: string
+  github_url?: string
+  artifacts?: any[]
+  auto_review_result?: string
+  auto_review_scores?: any
+  auto_review_feedback?: string
+  submitted_at?: string
+}) {
+  const { rows } = await sql`
+    INSERT INTO taskhive_deliverables (
+      issue_id, taskhive_deliverable_id, taskhive_task_id,
+      worker_name, worker_rating, content, github_url, artifacts,
+      auto_review_result, auto_review_scores, auto_review_feedback, submitted_at
+    ) VALUES (
+      ${data.issue_id}, ${data.taskhive_deliverable_id}, ${data.taskhive_task_id},
+      ${data.worker_name || null}, ${data.worker_rating || null}, ${data.content},
+      ${data.github_url || null}, ${JSON.stringify(data.artifacts || [])},
+      ${data.auto_review_result || null}, ${data.auto_review_scores ? JSON.stringify(data.auto_review_scores) : null},
+      ${data.auto_review_feedback || null}, ${data.submitted_at || new Date().toISOString()}
+    ) RETURNING *
+  `
+  return rows[0] || null
+}
+
+export async function getTaskHiveDeliverables(issueId: number) {
+  const { rows } = await sql`
+    SELECT d.*, u.name as reviewer_name
+    FROM taskhive_deliverables d
+    LEFT JOIN users u ON d.reviewed_by = u.id
+    WHERE d.issue_id = ${issueId}
+    ORDER BY d.submitted_at DESC
+  `
+  return rows
+}
+
+export async function updateTaskHiveDeliverable(id: number, data: {
+  status: string
+  reviewed_by?: number
+  revision_notes?: string
+}) {
+  const { rows } = await sql`
+    UPDATE taskhive_deliverables SET
+      status = ${data.status},
+      reviewed_by = ${data.reviewed_by || null},
+      revision_notes = ${data.revision_notes || null},
+      reviewed_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `
+  return rows[0] || null
+}
+
 export async function getIssueActivity(issueId: number) {
   // Get comments
   const { rows: comments } = await sql`

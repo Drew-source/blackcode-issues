@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { sql } from '@/lib/db'
+import { sql, createTaskHiveDeliverable } from '@/lib/db'
 
 // Status mapping: TaskHive -> BlackCode
 const STATUS_MAP: Record<string, string> = {
@@ -77,9 +77,31 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, updated: { issue_id: issue.id, new_status: newBcStatus } })
   }
 
-  // Phase 2 will handle deliverable.submitted for the review panel
+  // Handle deliverable submissions
   if (type === 'deliverable.submitted') {
-    return NextResponse.json({ ok: true, noted: 'deliverable.submitted logged' })
+    const deliverableData = data.deliverable || data
+
+    await createTaskHiveDeliverable({
+      issue_id: issue.id,
+      taskhive_deliverable_id: deliverableData.id || deliverableData.deliverable_id || 0,
+      taskhive_task_id: taskId,
+      worker_name: deliverableData.worker_name,
+      worker_rating: deliverableData.worker_rating,
+      content: deliverableData.content || '',
+      github_url: deliverableData.github_url,
+      artifacts: deliverableData.artifacts || [],
+      auto_review_result: deliverableData.auto_review_result,
+      auto_review_scores: deliverableData.auto_review_scores,
+      auto_review_feedback: deliverableData.auto_review_feedback,
+      submitted_at: deliverableData.submitted_at,
+    })
+
+    return NextResponse.json({ ok: true, created: 'taskhive_deliverable' })
+  }
+
+  // Handle deliverable acceptance and revision requests
+  if (type === 'deliverable.accepted' || type === 'deliverable.revision_requested') {
+    return NextResponse.json({ ok: true, noted: type })
   }
 
   return NextResponse.json({ ok: true, skipped: `unhandled event: ${type}` })

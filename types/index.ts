@@ -142,6 +142,28 @@ export interface KanbanData {
   [key: string]: Issue[]
 }
 
+export interface TaskHiveDeliverable {
+  id: number
+  issue_id: number
+  taskhive_deliverable_id: number
+  taskhive_task_id: number
+  worker_name?: string
+  worker_rating?: number
+  content: string
+  github_url?: string
+  artifacts: Array<{ filename: string; mimeType: string; sizeBytes: number }>
+  auto_review_result?: string
+  auto_review_scores?: { completeness: number; quality: number; adherence: number; clarity: number }
+  auto_review_feedback?: string
+  status: 'pending_review' | 'accepted' | 'rejected' | 'revision_requested'
+  revision_notes?: string
+  reviewed_by?: number
+  reviewer_name?: string
+  reviewed_at?: string
+  submitted_at: string
+  created_at: string
+}
+
 // API Response types
 export interface ApiError {
   error: string
