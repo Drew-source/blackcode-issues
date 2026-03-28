@@ -956,3 +956,39 @@ export async function deleteApiKey(id: number) {
   await sql`UPDATE api_keys SET is_active = false WHERE id = ${id}`
 }
 
+// ============================================
+// SYNC HEALTH
+// ============================================
+
+export async function getSyncHealthMetrics() {
+  const { rows } = await sql`
+    SELECT
+      COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
+      COUNT(*) FILTER (WHERE status = 'processing')::int AS processing_count,
+      COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_count,
+      COUNT(*) FILTER (WHERE status = 'dead')::int AS dead_count,
+      COUNT(*) FILTER (WHERE status = 'pending' AND retry_count > 0)::int AS retrying_count
+    FROM sync_queue
+  `
+  return rows[0] || { pending_count: 0, processing_count: 0, completed_count: 0, dead_count: 0, retrying_count: 0 }
+}
+
+export async function getDeadSyncEntries() {
+  const { rows } = await sql`
+    SELECT sq.*, i.title as issue_title
+    FROM sync_queue sq
+    LEFT JOIN issues i ON sq.issue_id = i.id
+    WHERE sq.status = 'dead'
+    ORDER BY sq.created_at DESC
+    LIMIT 50
+  `
+  return rows
+}
+
+export async function retrySyncEntry(id: number) {
+  await sql`
+    UPDATE sync_queue SET status = 'pending', retry_count = 0, next_retry_at = NOW(), error_message = NULL
+    WHERE id = ${id} AND status = 'dead'
+  `
+}
+
