@@ -174,6 +174,50 @@ export async function DELETE(
       )
     }
 
+    // Sync-aware deletion: check TaskHive task status before deleting
+    if (oldIssue.taskhive_task_id) {
+      const apiKey = process.env.TASKHIVE_SERVICE_ACCOUNT_KEY
+      const baseUrl = process.env.TASKHIVE_API_URL || 'https://taskhive-pied.vercel.app'
+
+      if (apiKey) {
+        try {
+          // Check TaskHive task status
+          const res = await fetch(`${baseUrl}/api/v1/tasks/${oldIssue.taskhive_task_id}`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+          })
+
+          if (res.ok) {
+            const taskData = await res.json()
+            const taskStatus = taskData.data?.task?.status || taskData.data?.status
+
+            // Block deletion if task has active work
+            if (['claimed', 'in_progress', 'delivered', 'disputed'].includes(taskStatus)) {
+              return NextResponse.json({
+                error: 'Cannot delete: this issue has active work on TaskHive',
+                suggestion: `The TaskHive task is '${taskStatus}'. Resolve it on TaskHive before deleting.`,
+                taskhive_task_id: oldIssue.taskhive_task_id,
+              }, { status: 409 })
+            }
+
+            // Cancel open tasks on TaskHive
+            if (taskStatus === 'open') {
+              await fetch(`${baseUrl}/api/v1/tasks/${oldIssue.taskhive_task_id}/cancel`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${apiKey}`,
+                },
+              })
+            }
+            // completed/cancelled: proceed with deletion (no TaskHive action needed)
+          }
+        } catch (e) {
+          // If TaskHive is unreachable, log but don't block deletion
+          console.error('Failed to check TaskHive status for deletion:', e)
+        }
+      }
+    }
+
     await deleteIssue(id)
 
     // Log transaction for rollback

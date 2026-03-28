@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
         description: plainDescription || issue.title,
         payment_details: 'Contact poster for payment details',
         deadline: issue.due_date || null,
+        project_id: issue.project_id,
       })
 
       // Fire-and-forget: trigger sync processing

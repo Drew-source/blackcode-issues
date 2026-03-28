@@ -95,6 +95,31 @@ export async function processSyncEntry(entry: SyncQueueEntry) {
   }
 
   if (entry.event_type === 'issue_created') {
+    // Check if project already has a parent task for grouping
+    if (entry.payload.project_id) {
+      const { rows: projectRows } = await sql`
+        SELECT taskhive_parent_task_id FROM projects WHERE id = ${entry.payload.project_id as number}
+      `
+      const parentTaskId = projectRows[0]?.taskhive_parent_task_id as number | null
+
+      if (parentTaskId) {
+        // Add as sub-issue to existing parent task
+        const res = await fetch(`${baseUrl}/api/v1/tasks/${String(parentTaskId)}/issues`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            title: entry.payload.title,
+            description: entry.payload.description || entry.payload.title,
+            deadline: entry.payload.deadline,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(`TaskHive API error: ${data.error || res.statusText}`)
+        return { ...data, _isSubIssue: true, _parentTaskId: parentTaskId }
+      }
+    }
+
+    // No parent task — create new flat task
     const res = await fetch(`${baseUrl}/api/v1/tasks`, {
       method: 'POST',
       headers,
@@ -132,8 +157,22 @@ export async function processSyncQueue() {
       const result = await processSyncEntry(entry)
       await markSyncCompleted(entry.id)
 
-      if (entry.event_type === 'issue_created' && result?.data?.task?.id) {
-        await updateIssueSyncStatus(entry.issue_id, 'synced', result.data.task.id)
+      if (entry.event_type === 'issue_created') {
+        if (result._isSubIssue) {
+          // Sub-issue created under existing parent task
+          await updateIssueSyncStatus(entry.issue_id, 'synced', result._parentTaskId)
+        } else if (result?.data?.task?.id) {
+          // New flat task created
+          await updateIssueSyncStatus(entry.issue_id, 'synced', result.data.task.id)
+
+          // Store parent task ID on project for future grouping
+          if (entry.payload.project_id) {
+            await sql`
+              UPDATE projects SET taskhive_parent_task_id = ${result.data.task.id}
+              WHERE id = ${entry.payload.project_id as number} AND taskhive_parent_task_id IS NULL
+            `
+          }
+        }
       }
 
       processed++
