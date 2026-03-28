@@ -1,4 +1,6 @@
 import { neon, neonConfig } from '@neondatabase/serverless'
+import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 
 // Configure Neon for serverless
 neonConfig.fetchConnectionCache = true
@@ -920,5 +922,37 @@ export async function getIssueActivity(issueId: number) {
   )
 
   return activity
+}
+
+// ============================================
+// API KEYS
+// ============================================
+
+export async function createApiKey(userId: number, name: string = 'default') {
+  const rawKey = `bc_agent_${crypto.randomBytes(32).toString('hex')}`
+  const keyHash = await bcrypt.hash(rawKey, 10)
+  const keyPrefix = rawKey.substring(0, 18)
+
+  const { rows: result } = await sql`
+    INSERT INTO api_keys (user_id, key_hash, key_prefix, name)
+    VALUES (${userId}, ${keyHash}, ${keyPrefix}, ${name})
+    RETURNING id, key_prefix, name, created_at
+  `
+  const row = result[0]
+  return {
+    id: row.id as number,
+    key_prefix: row.key_prefix as string,
+    name: row.name as string,
+    created_at: row.created_at as string,
+    raw_key: rawKey,
+  }
+}
+
+export async function updateApiKeyLastUsed(id: number) {
+  await sql`UPDATE api_keys SET last_used_at = NOW() WHERE id = ${id}`
+}
+
+export async function deleteApiKey(id: number) {
+  await sql`UPDATE api_keys SET is_active = false WHERE id = ${id}`
 }
 

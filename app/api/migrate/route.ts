@@ -141,6 +141,34 @@ export async function POST(request: NextRequest) {
       // Column might already exist
     }
 
+    // Phase 3: API keys table for agent authentication
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS api_keys (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          key_hash TEXT NOT NULL,
+          key_prefix VARCHAR(20) NOT NULL,
+          name VARCHAR(100) NOT NULL DEFAULT 'default',
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          last_used_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `
+      migrations.push('Created api_keys table')
+    } catch (e) {
+      // Table might already exist
+    }
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)`
+      await sql`CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)`
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)`
+      migrations.push('Created api_keys indexes')
+    } catch (e) {
+      // Indexes might already exist
+    }
+
     return NextResponse.json({
       success: true,
       migrations,

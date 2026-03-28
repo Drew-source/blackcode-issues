@@ -164,6 +164,17 @@ export interface TaskHiveDeliverable {
   created_at: string
 }
 
+export interface ApiKey {
+  id: number
+  user_id: number
+  key_hash: string
+  key_prefix: string
+  name: string
+  is_active: boolean
+  last_used_at?: string
+  created_at: string
+}
+
 // API Response types
 export interface ApiError {
   error: string
