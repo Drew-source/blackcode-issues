@@ -1,0 +1,111 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { neon } from '@neondatabase/serverless'
+
+const sql = neon(process.env.DATABASE_URL!)
+
+// POST /api/migrate - Run database migrations
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Only allow admins to run migrations
+    if (session.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+    }
+
+    const migrations: string[] = []
+
+    // Add start_date and due_date columns to issues table if they don't exist
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS start_date DATE`
+      migrations.push('Added start_date column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS due_date DATE`
+      migrations.push('Added due_date column to issues')
+    } catch (e) {
+      // Column might already exist  
+    }
+
+    // Add estimated_hours column for better time tracking
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS estimated_hours DECIMAL(5,1)`
+      migrations.push('Added estimated_hours column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    // Sync fields for TaskHive integration
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS internal_only BOOLEAN DEFAULT false`
+      migrations.push('Added internal_only column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS taskhive_task_id INTEGER`
+      migrations.push('Added taskhive_task_id column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS taskhive_sync_status VARCHAR(20) DEFAULT 'pending'`
+      migrations.push('Added taskhive_sync_status column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    // Create sync queue table
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS sync_queue (
+          id SERIAL PRIMARY KEY,
+          issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+          event_type VARCHAR(50) NOT NULL,
+          payload JSONB NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending',
+          retry_count INTEGER DEFAULT 0,
+          max_retries INTEGER DEFAULT 10,
+          next_retry_at TIMESTAMPTZ DEFAULT NOW(),
+          idempotency_key VARCHAR(255) UNIQUE,
+          error_message TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          processed_at TIMESTAMPTZ
+        )
+      `
+      migrations.push('Created sync_queue table')
+    } catch (e) {
+      // Table might already exist
+    }
+
+    try {
+      await sql`CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, next_retry_at)`
+      await sql`CREATE INDEX IF NOT EXISTS idx_sync_queue_issue ON sync_queue(issue_id, created_at)`
+      await sql`CREATE INDEX IF NOT EXISTS idx_issues_sync_status ON issues(taskhive_sync_status)`
+      migrations.push('Created sync queue indexes')
+    } catch (e) {
+      // Indexes might already exist
+    }
+
+    return NextResponse.json({
+      success: true,
+      migrations,
+    })
+  } catch (error) {
+    console.error('Migration failed:', error)
+    return NextResponse.json(
+      { error: 'Migration failed', details: String(error) },
+      { status: 500 }
+    )
+  }
+}
