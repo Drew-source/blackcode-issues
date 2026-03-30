@@ -73,6 +73,7 @@ export function CreateIssueModal({
   const [paymentCurrency, setPaymentCurrency] = useState('USD')
   const [paymentDetails, setPaymentDetails] = useState('')
   const [requirements, setRequirements] = useState('')
+  const [claimOnlyDetails, setClaimOnlyDetails] = useState('')
 
   // Dropdown states
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -171,6 +172,7 @@ export function CreateIssueModal({
           payment_currency: paymentCurrency || undefined,
           payment_details: paymentDetails || undefined,
           requirements: requirements || undefined,
+          claim_only_details: claimOnlyDetails || undefined,
         }),
       })
 
@@ -197,6 +199,7 @@ export function CreateIssueModal({
         setPaymentCurrency('USD')
         setPaymentDetails('')
         setRequirements('')
+        setClaimOnlyDetails('')
         titleInputRef.current?.focus()
       } else {
         onSuccess?.(newIssue)
@@ -401,6 +404,21 @@ export function CreateIssueModal({
                   maxLength={5000}
                   rows={3}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              {/* Claim-Only Details */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">
+                  Claim-Only Details
+                </label>
+                <textarea
+                  value={claimOnlyDetails}
+                  onChange={(e) => setClaimOnlyDetails(e.target.value)}
+                  placeholder="Private information revealed only after the task is claimed (e.g., repo URLs, API keys, access credentials)"
+                  rows={3}
+                  maxLength={5000}
+                  className="w-full bg-[var(--bg-base)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-active)] focus:shadow-[0_0_0_3px_rgba(99,102,241,0.15)] resize-y"
                 />
               </div>
             </div>
