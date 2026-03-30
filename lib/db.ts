@@ -234,11 +234,17 @@ export async function createIssue(data: {
   milestone_id?: number
   reporter_id?: number
   internal_only?: boolean
+  due_date?: string
+  payment_amount?: number
+  payment_currency?: string
+  payment_details?: string
+  requirements?: string
 }) {
   const { rows } = await sql`
     INSERT INTO issues (
       project_id, title, description, status, priority,
-      assignee_id, milestone_id, reporter_id, internal_only
+      assignee_id, milestone_id, reporter_id, internal_only,
+      due_date, payment_amount, payment_currency, payment_details, requirements
     )
     VALUES (
       ${data.project_id},
@@ -249,7 +255,12 @@ export async function createIssue(data: {
       ${data.assignee_id || null},
       ${data.milestone_id || null},
       ${data.reporter_id || null},
-      ${data.internal_only ?? false}
+      ${data.internal_only ?? false},
+      ${data.due_date || null},
+      ${data.payment_amount ?? null},
+      ${data.payment_currency || null},
+      ${data.payment_details || null},
+      ${data.requirements || null}
     )
     RETURNING *
   `
@@ -266,6 +277,10 @@ export async function updateIssue(id: number, data: Partial<{
   start_date: string | null
   due_date: string | null
   internal_only: boolean
+  payment_amount: number | null
+  payment_currency: string | null
+  payment_details: string | null
+  requirements: string | null
 }>) {
   // Get current issue first
   const current = await getIssue(id)
@@ -281,6 +296,10 @@ export async function updateIssue(id: number, data: Partial<{
   const start_date = data.start_date !== undefined ? data.start_date : (current as any).start_date
   const due_date = data.due_date !== undefined ? data.due_date : (current as any).due_date
   const internal_only = data.internal_only !== undefined ? data.internal_only : (current as any).internal_only
+  const payment_amount = data.payment_amount === undefined ? (current as any).payment_amount : data.payment_amount
+  const payment_currency = data.payment_currency === undefined ? (current as any).payment_currency : data.payment_currency
+  const payment_details = data.payment_details === undefined ? (current as any).payment_details : data.payment_details
+  const requirements = data.requirements === undefined ? (current as any).requirements : data.requirements
 
   const { rows } = await sql`
     UPDATE issues
@@ -294,6 +313,10 @@ export async function updateIssue(id: number, data: Partial<{
       start_date = ${start_date},
       due_date = ${due_date},
       internal_only = ${internal_only},
+      payment_amount = ${payment_amount},
+      payment_currency = ${payment_currency},
+      payment_details = ${payment_details},
+      requirements = ${requirements},
       updated_at = NOW()
     WHERE id = ${id}
     RETURNING *
