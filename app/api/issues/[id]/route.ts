@@ -139,6 +139,7 @@ export async function PATCH(
           payment_amount: issue.payment_amount,
           payment_currency: issue.payment_currency,
           payment_details: issue.payment_details || undefined,
+          claim_only_details: issue.claim_only_details || undefined,
           deadline: issue.due_date || null,
           project_id: issue.project_id,
         })
@@ -156,6 +157,7 @@ export async function PATCH(
             payment_amount: issue.payment_amount,
             payment_currency: issue.payment_currency,
             payment_details: issue.payment_details || undefined,
+            claim_only_details: issue.claim_only_details || undefined,
             deadline: issue.due_date || null,
           }
         })
@@ -171,6 +173,7 @@ export async function PATCH(
             payment_amount: issue.payment_amount,
             payment_currency: issue.payment_currency,
             payment_details: issue.payment_details || undefined,
+            claim_only_details: issue.claim_only_details || undefined,
             deadline: issue.due_date || null,
             project_id: issue.project_id,
           })
