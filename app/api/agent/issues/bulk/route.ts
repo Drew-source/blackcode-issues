@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAgentAuth } from '@/lib/agent-response'
-import { createIssue, updateIssue, logTransaction } from '@/lib/db'
-import { enqueueSyncEvent, processSyncQueue } from '@/lib/sync'
+import { createIssue, updateIssue, logTransaction, updateSyncStatus } from '@/lib/db'
+import { enqueueSyncEvent, processSyncQueue, isSyncReady } from '@/lib/sync'
 
 export async function POST(req: Request) {
   return withAgentAuth(req, async (agent) => {
@@ -52,6 +52,11 @@ export async function POST(req: Request) {
             milestone_id: item.milestone_id,
             reporter_id: agent.user_id,
             internal_only: item.internal_only,
+            due_date: item.due_date,
+            payment_amount: item.payment_amount,
+            payment_currency: item.payment_currency,
+            payment_details: item.payment_details,
+            requirements: item.requirements,
           })
 
           if (issue) {
@@ -64,18 +69,25 @@ export async function POST(req: Request) {
             })
 
             if (!issue.internal_only) {
-              const plainDescription = issue.description
-                ? issue.description.replace(/<[^>]*>/g, '').trim()
-                : ''
+              if (isSyncReady(issue as any)) {
+                const plainDescription = issue.description
+                  ? issue.description.replace(/<[^>]*>/g, '').trim()
+                  : ''
 
-              await enqueueSyncEvent(issue.id, 'issue_created', {
-                title: issue.title,
-                description: plainDescription || issue.title,
-                payment_details: 'Contact poster for payment details',
-                deadline: issue.due_date || null,
-                project_id: issue.project_id,
-              })
-              needsSync = true
+                await enqueueSyncEvent(issue.id, 'issue_created', {
+                  title: issue.title,
+                  description: plainDescription || issue.title,
+                  requirements: issue.requirements || undefined,
+                  payment_amount: issue.payment_amount,
+                  payment_currency: issue.payment_currency,
+                  payment_details: issue.payment_details || undefined,
+                  deadline: issue.due_date || null,
+                  project_id: issue.project_id,
+                })
+                needsSync = true
+              } else {
+                await updateSyncStatus(issue.id, 'pending_fields')
+              }
             }
 
             results.push(issue)
@@ -103,6 +115,10 @@ export async function POST(req: Request) {
             start_date: item.start_date,
             due_date: item.due_date,
             internal_only: item.internal_only,
+            payment_amount: item.payment_amount,
+            payment_currency: item.payment_currency,
+            payment_details: item.payment_details,
+            requirements: item.requirements,
           })
 
           if (issue) {
@@ -113,6 +129,27 @@ export async function POST(req: Request) {
               record_id: item.id,
               new_data: issue,
             })
+
+            // Check for pending_fields → pending transition
+            if (!issue.internal_only && issue.taskhive_sync_status === 'pending_fields' && isSyncReady(issue as any)) {
+              const plainDescription = issue.description
+                ? issue.description.replace(/<[^>]*>/g, '').trim()
+                : ''
+
+              await enqueueSyncEvent(issue.id, 'issue_created', {
+                title: issue.title,
+                description: plainDescription || issue.title,
+                requirements: issue.requirements || undefined,
+                payment_amount: issue.payment_amount,
+                payment_currency: issue.payment_currency,
+                payment_details: issue.payment_details || undefined,
+                deadline: issue.due_date || null,
+                project_id: issue.project_id,
+              })
+              await updateSyncStatus(issue.id, 'pending')
+              needsSync = true
+            }
+
             results.push(issue)
           } else {
             errors.push({ index: i, error: `Issue ${item.id} not found` })
