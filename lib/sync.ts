@@ -1,6 +1,11 @@
 import { sql } from './db'
 import type { SyncQueueEntry } from '@/types'
 
+// Check if an issue has the required fields for TaskHive sync
+export function isSyncReady(issue: Record<string, unknown>): boolean {
+  return issue.payment_amount != null && issue.payment_currency != null
+}
+
 // Insert a sync queue entry
 export async function enqueueSyncEvent(
   issueId: number,
@@ -110,6 +115,10 @@ export async function processSyncEntry(entry: SyncQueueEntry) {
           body: JSON.stringify({
             title: entry.payload.title,
             description: entry.payload.description || entry.payload.title,
+            requirements: entry.payload.requirements || undefined,
+            payment_amount: entry.payload.payment_amount,
+            payment_currency: entry.payload.payment_currency,
+            payment_details: entry.payload.payment_details || undefined,
             deadline: entry.payload.deadline,
           }),
         })
@@ -123,7 +132,16 @@ export async function processSyncEntry(entry: SyncQueueEntry) {
     const res = await fetch(`${baseUrl}/api/v1/tasks`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(entry.payload),
+      body: JSON.stringify({
+        title: entry.payload.title,
+        description: entry.payload.description || entry.payload.title,
+        requirements: entry.payload.requirements || undefined,
+        payment_amount: entry.payload.payment_amount,
+        payment_currency: entry.payload.payment_currency,
+        payment_details: entry.payload.payment_details || undefined,
+        deadline: entry.payload.deadline,
+        category_id: entry.payload.category_id || undefined,
+      }),
     })
     const data = await res.json()
     if (!res.ok) throw new Error(`TaskHive API error: ${data.error || res.statusText}`)
