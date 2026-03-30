@@ -50,6 +50,10 @@ export interface Issue {
   reporter_id?: number
   due_date?: string
   estimate_hours?: number
+  payment_amount?: number
+  payment_currency?: string
+  payment_details?: string
+  requirements?: string
   assignee_name?: string
   assignee_avatar?: string
   milestone_name?: string

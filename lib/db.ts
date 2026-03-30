@@ -48,6 +48,10 @@ export interface Issue {
   estimated_hours?: number
   comment_count?: number
   attachment_count?: number
+  payment_amount?: number
+  payment_currency?: string
+  payment_details?: string
+  requirements?: string
   internal_only?: boolean
   taskhive_task_id?: number
   taskhive_sync_status?: string
@@ -299,6 +303,10 @@ export async function updateIssue(id: number, data: Partial<{
 
 export async function deleteIssue(id: number) {
   await sql`DELETE FROM issues WHERE id = ${id}`
+}
+
+export async function updateSyncStatus(issueId: number, status: string) {
+  await sql`UPDATE issues SET taskhive_sync_status = ${status} WHERE id = ${issueId}`
 }
 
 // ============================================
