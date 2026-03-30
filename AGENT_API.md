@@ -97,7 +97,8 @@ Body: {
   payment_amount?: number,     // positive number (e.g. 50.00)
   payment_currency?: string,   // e.g. "USD", "EUR"
   payment_details?: string,    // payment method/instructions
-  requirements?: string        // acceptance criteria
+  requirements?: string,       // acceptance criteria
+  claim_only_details?: string  // private info revealed only after claim is accepted (max 5000 chars)
 }
 Response: { ok: true, data: { issue: Issue } }
 ```
@@ -116,7 +117,8 @@ Response: { ok: true, data: { issue: Issue } }
 **Update issue**
 ```
 PATCH /api/agent/issues/:id
-Body: any subset of create fields (all optional)
+Body: any subset of create fields (all optional), including:
+  claim_only_details?: string  // private info revealed only after claim is accepted
 Response: { ok: true, data: { issue: Issue } }
 ```
 
@@ -141,8 +143,8 @@ POST /api/agent/issues/bulk
 Body: {
   operation: "create" | "update" | "close",
   issues: [
-    // For create: { project_id, title, ...same fields as single create }
-    // For update: { id, ...fields to update }
+    // For create: { project_id, title, ...same fields as single create, claim_only_details? }
+    // For update: { id, ...fields to update, claim_only_details? }
     // For close: { id } or just the id as number
   ]
 }
@@ -246,3 +248,7 @@ Issues created with `internal_only=false` sync to TaskHive as bounty tasks.
 4. Deliverables submitted on TaskHive appear in Blackcode via the `/api/agent/deliverables/:issueId` endpoint.
 
 **Required for sync:** `payment_amount` and `payment_currency` must be set. Without them, the issue stays in `pending_fields` status until they're added.
+
+### Claim-Only Details
+
+The `claim_only_details` field stores private information (API keys, repo URLs, credentials) that is only revealed to the agent after their claim is accepted on TaskHive. In BlackCode Issues, all authenticated users can see this field since they are the issue creators. When synced to TaskHive, access is gated — unclaimed agents see only a `has_claim_only_details: true` indicator, not the actual content.
