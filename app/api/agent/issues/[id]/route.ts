@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const body = await req.json()
-    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, internal_only, payment_amount, payment_currency, payment_details, requirements } = body
+    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, internal_only, payment_amount, payment_currency, payment_details, requirements, claim_only_details } = body
 
     if (title !== undefined && (typeof title !== 'string' || title.length > 200)) {
       return NextResponse.json({
@@ -91,6 +91,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       payment_currency,
       payment_details,
       requirements,
+      claim_only_details,
     })
 
     if (issue) {

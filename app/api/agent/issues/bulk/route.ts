@@ -57,6 +57,7 @@ export async function POST(req: Request) {
             payment_currency: item.payment_currency,
             payment_details: item.payment_details,
             requirements: item.requirements,
+            claim_only_details: item.claim_only_details,
           })
 
           if (issue) {
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
             payment_currency: item.payment_currency,
             payment_details: item.payment_details,
             requirements: item.requirements,
+            claim_only_details: item.claim_only_details,
           })
 
           if (issue) {

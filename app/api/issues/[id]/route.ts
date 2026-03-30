@@ -70,7 +70,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, payment_amount, payment_currency, payment_details, requirements, internal_only } = body
+    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, payment_amount, payment_currency, payment_details, requirements, internal_only, claim_only_details } = body
 
     // Validation
     if (title !== undefined && (typeof title !== 'string' || title.length > 200)) {
@@ -109,6 +109,7 @@ export async function PATCH(
       payment_currency,
       payment_details,
       requirements,
+      claim_only_details,
     })
 
     // Log transaction for rollback

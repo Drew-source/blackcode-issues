@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only, payment_amount, payment_currency, payment_details, requirements } = body
+    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only, payment_amount, payment_currency, payment_details, requirements, claim_only_details } = body
 
     // Validation
     if (!project_id || typeof project_id !== 'number') {
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       payment_currency,
       payment_details,
       requirements,
+      claim_only_details,
     })
 
     // Enqueue sync event for non-internal issues

@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   return withAgentAuth(req, async (agent) => {
     const body = await req.json()
-    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only, due_date, payment_amount, payment_currency, payment_details, requirements } = body
+    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only, due_date, payment_amount, payment_currency, payment_details, requirements, claim_only_details } = body
 
     if (!project_id || typeof project_id !== 'number') {
       return NextResponse.json({
@@ -90,6 +90,7 @@ export async function POST(req: Request) {
       payment_currency,
       payment_details,
       requirements,
+      claim_only_details,
     })
 
     if (issue) {
