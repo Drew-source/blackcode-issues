@@ -169,6 +169,35 @@ export async function POST(request: NextRequest) {
       // Indexes might already exist
     }
 
+    // Phase 4: Bounty/payment fields on issues for TaskHive sub-issue sync
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS payment_amount DECIMAL(10,2)`
+      migrations.push('Added payment_amount column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS payment_currency VARCHAR(10)`
+      migrations.push('Added payment_currency column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS payment_details TEXT`
+      migrations.push('Added payment_details column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS requirements TEXT`
+      migrations.push('Added requirements column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
     return NextResponse.json({
       success: true,
       migrations,
