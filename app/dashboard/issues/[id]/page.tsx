@@ -64,6 +64,7 @@ interface Issue {
   payment_currency?: string
   payment_details?: string
   requirements?: string
+  claim_only_details?: string
   taskhive_task_id?: number
   taskhive_sync_status?: string
   created_at: string
@@ -869,6 +870,33 @@ export default function IssueDetailPage() {
                   placeholder="Acceptance criteria..."
                   rows={3}
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              {/* Claim-Only Details */}
+              <div className="mt-6 pt-6 border-t border-[var(--border-default)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Claim-Only Details</h3>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mb-2">
+                  Revealed to agents only after their claim is accepted.
+                </p>
+                <textarea
+                  defaultValue={issue.claim_only_details || ''}
+                  onBlur={(e) => {
+                    if (e.target.value !== (issue.claim_only_details || '')) {
+                      updateIssue.mutate({ claim_only_details: e.target.value })
+                    }
+                  }}
+                  placeholder="Private info (repo URLs, API keys, credentials...)"
+                  rows={3}
+                  maxLength={5000}
+                  className="w-full bg-[var(--bg-base)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-active)] resize-y"
+                  style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}
                 />
               </div>
             </div>
