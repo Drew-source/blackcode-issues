@@ -69,6 +69,10 @@ export function CreateIssueModal({
   const [internalOnly, setInternalOnly] = useState(false)
   const [createMore, setCreateMore] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState<string>('')
+  const [paymentCurrency, setPaymentCurrency] = useState('USD')
+  const [paymentDetails, setPaymentDetails] = useState('')
+  const [requirements, setRequirements] = useState('')
 
   // Dropdown states
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
@@ -163,6 +167,10 @@ export function CreateIssueModal({
           assignee_id: assigneeId || undefined,
           milestone_id: milestoneId || undefined,
           internal_only: internalOnly,
+          payment_amount: paymentAmount ? parseFloat(paymentAmount) : undefined,
+          payment_currency: paymentCurrency || undefined,
+          payment_details: paymentDetails || undefined,
+          requirements: requirements || undefined,
         }),
       })
 
@@ -185,6 +193,10 @@ export function CreateIssueModal({
         setPriority(3)
         setMilestoneId(null)
         setInternalOnly(false)
+        setPaymentAmount('')
+        setPaymentCurrency('USD')
+        setPaymentDetails('')
+        setRequirements('')
         titleInputRef.current?.focus()
       } else {
         onSuccess?.(newIssue)
@@ -323,6 +335,74 @@ export function CreateIssueModal({
                 hideToolbar={false}
                 minHeight={isExpanded ? '350px' : '200px'}
               />
+            </div>
+
+            {/* Bounty / Payment Fields */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Bounty Details
+              </h3>
+
+              {/* Payment Amount + Currency - Side by side */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    Payment Amount
+                  </label>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+                <div className="w-24">
+                  <label className="block text-xs text-muted-foreground mb-1">
+                    Currency
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentCurrency}
+                    onChange={(e) => setPaymentCurrency(e.target.value.toUpperCase())}
+                    placeholder="USD"
+                    maxLength={10}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Details */}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Payment Details
+                </label>
+                <textarea
+                  value={paymentDetails}
+                  onChange={(e) => setPaymentDetails(e.target.value)}
+                  placeholder="How will payment be made? (e.g., PayPal, crypto, bank transfer)"
+                  maxLength={500}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              {/* Requirements */}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">
+                  Requirements
+                </label>
+                <textarea
+                  value={requirements}
+                  onChange={(e) => setRequirements(e.target.value)}
+                  placeholder="Acceptance criteria — what does 'done' look like?"
+                  maxLength={5000}
+                  rows={3}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
             </div>
           </div>
 
