@@ -240,12 +240,14 @@ export async function createIssue(data: {
   payment_currency?: string
   payment_details?: string
   requirements?: string
+  claim_only_details?: string
 }) {
   const { rows } = await sql`
     INSERT INTO issues (
       project_id, title, description, status, priority,
       assignee_id, milestone_id, reporter_id, internal_only,
-      due_date, payment_amount, payment_currency, payment_details, requirements
+      due_date, payment_amount, payment_currency, payment_details, requirements,
+      claim_only_details
     )
     VALUES (
       ${data.project_id},
@@ -261,7 +263,8 @@ export async function createIssue(data: {
       ${data.payment_amount ?? null},
       ${data.payment_currency || null},
       ${data.payment_details || null},
-      ${data.requirements || null}
+      ${data.requirements || null},
+      ${data.claim_only_details || null}
     )
     RETURNING *
   `
@@ -282,6 +285,7 @@ export async function updateIssue(id: number, data: Partial<{
   payment_currency: string | null
   payment_details: string | null
   requirements: string | null
+  claim_only_details: string
 }>) {
   // Get current issue first
   const current = await getIssue(id)
@@ -301,6 +305,7 @@ export async function updateIssue(id: number, data: Partial<{
   const payment_currency = data.payment_currency === undefined ? (current as any).payment_currency : data.payment_currency
   const payment_details = data.payment_details === undefined ? (current as any).payment_details : data.payment_details
   const requirements = data.requirements === undefined ? (current as any).requirements : data.requirements
+  const claim_only_details = data.claim_only_details === undefined ? (current as any).claim_only_details : data.claim_only_details
 
   const { rows } = await sql`
     UPDATE issues
@@ -318,6 +323,7 @@ export async function updateIssue(id: number, data: Partial<{
       payment_currency = ${payment_currency},
       payment_details = ${payment_details},
       requirements = ${requirements},
+      claim_only_details = ${claim_only_details},
       updated_at = NOW()
     WHERE id = ${id}
     RETURNING *
