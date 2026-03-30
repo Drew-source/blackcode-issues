@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         ? issue.description.replace(/<[^>]*>/g, '').trim()
         : ''
 
-      if (isSyncReady(issue)) {
+      if (isSyncReady(issue as any)) {
         await enqueueSyncEvent(issue.id, 'issue_created', {
           title: issue.title,
           description: plainDescription || issue.title,
