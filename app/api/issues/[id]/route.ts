@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getIssue, updateIssue, deleteIssue, logTransaction } from '@/lib/db'
-import { enqueueSyncEvent, processSyncQueue } from '@/lib/sync'
+import { getIssue, updateIssue, deleteIssue, logTransaction, updateSyncStatus } from '@/lib/db'
+import { enqueueSyncEvent, processSyncQueue, isSyncReady } from '@/lib/sync'
 
 export async function GET(
   request: NextRequest,
@@ -70,7 +70,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date } = body
+    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, payment_amount, payment_currency, payment_details, requirements, internal_only } = body
 
     // Validation
     if (title !== undefined && (typeof title !== 'string' || title.length > 200)) {
@@ -104,6 +104,11 @@ export async function PATCH(
       milestone_id,
       start_date,
       due_date,
+      internal_only,
+      payment_amount,
+      payment_currency,
+      payment_details,
+      requirements,
     })
 
     // Log transaction for rollback
@@ -118,22 +123,62 @@ export async function PATCH(
       })
     }
 
-    // Enqueue sync event for already-synced, non-internal issues
-    if (issue && issue.taskhive_task_id && !issue.internal_only) {
+    // Enqueue sync event based on sync state
+    if (issue && !issue.internal_only) {
       const plainDescription = issue.description
         ? issue.description.replace(/<[^>]*>/g, '').trim()
         : ''
 
-      await enqueueSyncEvent(issue.id, 'issue_updated', {
-        taskhive_task_id: issue.taskhive_task_id,
-        updates: {
+      // Case 1: Was pending_fields, now sync-ready → enqueue initial sync
+      if (issue.taskhive_sync_status === 'pending_fields' && isSyncReady(issue as any)) {
+        await enqueueSyncEvent(issue.id, 'issue_created', {
           title: issue.title,
           description: plainDescription || issue.title,
+          requirements: issue.requirements || undefined,
+          payment_amount: issue.payment_amount,
+          payment_currency: issue.payment_currency,
+          payment_details: issue.payment_details || undefined,
           deadline: issue.due_date || null,
+          project_id: issue.project_id,
+        })
+        await updateSyncStatus(issue.id, 'pending')
+        processSyncQueue().catch(() => {})
+      }
+      // Case 2: Already synced → enqueue update
+      else if (issue.taskhive_task_id) {
+        await enqueueSyncEvent(issue.id, 'issue_updated', {
+          taskhive_task_id: issue.taskhive_task_id,
+          updates: {
+            title: issue.title,
+            description: plainDescription || issue.title,
+            requirements: issue.requirements || undefined,
+            payment_amount: issue.payment_amount,
+            payment_currency: issue.payment_currency,
+            payment_details: issue.payment_details || undefined,
+            deadline: issue.due_date || null,
+          }
+        })
+        processSyncQueue().catch(() => {})
+      }
+      // Case 3: internal_only toggled from true to false
+      else if (oldIssue.internal_only && !issue.internal_only) {
+        if (isSyncReady(issue as any)) {
+          await enqueueSyncEvent(issue.id, 'issue_created', {
+            title: issue.title,
+            description: plainDescription || issue.title,
+            requirements: issue.requirements || undefined,
+            payment_amount: issue.payment_amount,
+            payment_currency: issue.payment_currency,
+            payment_details: issue.payment_details || undefined,
+            deadline: issue.due_date || null,
+            project_id: issue.project_id,
+          })
+          await updateSyncStatus(issue.id, 'pending')
+          processSyncQueue().catch(() => {})
+        } else {
+          await updateSyncStatus(issue.id, 'pending_fields')
         }
-      })
-
-      processSyncQueue().catch(() => {})
+      }
     }
 
     return NextResponse.json(issue)

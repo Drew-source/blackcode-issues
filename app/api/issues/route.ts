@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getIssuesByProject, getAllIssuesWithProjects, createIssue } from '@/lib/db'
-import { enqueueSyncEvent, processSyncQueue } from '@/lib/sync'
+import { getIssuesByProject, getAllIssuesWithProjects, createIssue, updateSyncStatus } from '@/lib/db'
+import { enqueueSyncEvent, processSyncQueue, isSyncReady } from '@/lib/sync'
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only } = body
+    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only, payment_amount, payment_currency, payment_details, requirements } = body
 
     // Validation
     if (!project_id || typeof project_id !== 'number') {
@@ -94,6 +94,10 @@ export async function POST(request: NextRequest) {
       milestone_id,
       reporter_id: session.user?.id,
       internal_only,
+      payment_amount,
+      payment_currency,
+      payment_details,
+      requirements,
     })
 
     // Enqueue sync event for non-internal issues
@@ -102,16 +106,23 @@ export async function POST(request: NextRequest) {
         ? issue.description.replace(/<[^>]*>/g, '').trim()
         : ''
 
-      await enqueueSyncEvent(issue.id, 'issue_created', {
-        title: issue.title,
-        description: plainDescription || issue.title,
-        payment_details: 'Contact poster for payment details',
-        deadline: issue.due_date || null,
-        project_id: issue.project_id,
-      })
+      if (isSyncReady(issue)) {
+        await enqueueSyncEvent(issue.id, 'issue_created', {
+          title: issue.title,
+          description: plainDescription || issue.title,
+          requirements: issue.requirements || undefined,
+          payment_amount: issue.payment_amount,
+          payment_currency: issue.payment_currency,
+          payment_details: issue.payment_details || undefined,
+          deadline: issue.due_date || null,
+          project_id: issue.project_id,
+        })
 
-      // Fire-and-forget: trigger sync processing
-      processSyncQueue().catch(() => {})
+        // Fire-and-forget: trigger sync processing
+        processSyncQueue().catch(() => {})
+      } else {
+        await updateSyncStatus(issue.id, 'pending_fields')
+      }
     }
 
     return NextResponse.json(issue, { status: 201 })
