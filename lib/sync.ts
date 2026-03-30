@@ -120,6 +120,7 @@ export async function processSyncEntry(entry: SyncQueueEntry) {
             payment_currency: entry.payload.payment_currency,
             payment_details: entry.payload.payment_details || undefined,
             deadline: entry.payload.deadline,
+            claim_only_details: entry.payload.claim_only_details || null,
           }),
         })
         const data = await res.json()
@@ -140,6 +141,7 @@ export async function processSyncEntry(entry: SyncQueueEntry) {
         payment_currency: entry.payload.payment_currency,
         payment_details: entry.payload.payment_details || undefined,
         deadline: entry.payload.deadline,
+        claim_only_details: entry.payload.claim_only_details || null,
         category_id: entry.payload.category_id || undefined,
       }),
     })
@@ -150,10 +152,14 @@ export async function processSyncEntry(entry: SyncQueueEntry) {
 
   if (entry.event_type === 'issue_updated') {
     const taskId = entry.payload.taskhive_task_id
+    const updates = entry.payload.updates as Record<string, unknown>
     const res = await fetch(`${baseUrl}/api/v1/tasks/${taskId}`, {
       method: 'PATCH',
       headers,
-      body: JSON.stringify(entry.payload.updates),
+      body: JSON.stringify({
+        ...updates,
+        claim_only_details: updates.claim_only_details,
+      }),
     })
     const data = await res.json()
     if (!res.ok) throw new Error(`TaskHive API error: ${data.error || res.statusText}`)
