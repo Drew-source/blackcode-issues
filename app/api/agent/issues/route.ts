@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAgentAuth } from '@/lib/agent-response'
-import { getIssuesByProject, getAllIssuesWithProjects, createIssue, logTransaction } from '@/lib/db'
-import { enqueueSyncEvent, processSyncQueue } from '@/lib/sync'
+import { getIssuesByProject, getAllIssuesWithProjects, createIssue, logTransaction, updateSyncStatus } from '@/lib/db'
+import { enqueueSyncEvent, processSyncQueue, isSyncReady } from '@/lib/sync'
 
 export async function GET(req: Request) {
   return withAgentAuth(req, async (agent) => {
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   return withAgentAuth(req, async (agent) => {
     const body = await req.json()
-    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only } = body
+    const { project_id, title, description, status, priority, assignee_id, milestone_id, internal_only, due_date, payment_amount, payment_currency, payment_details, requirements } = body
 
     if (!project_id || typeof project_id !== 'number') {
       return NextResponse.json({
@@ -68,6 +68,13 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
+    if (payment_amount !== undefined && (typeof payment_amount !== 'number' || payment_amount <= 0)) {
+      return NextResponse.json({
+        ok: false,
+        error: { code: 'VALIDATION_ERROR', message: 'payment_amount must be a positive number', suggestion: 'Example: 50.00' }
+      }, { status: 400 })
+    }
+
     const issue = await createIssue({
       project_id,
       title,
@@ -78,6 +85,11 @@ export async function POST(req: Request) {
       milestone_id,
       reporter_id: agent.user_id,
       internal_only,
+      due_date,
+      payment_amount,
+      payment_currency,
+      payment_details,
+      requirements,
     })
 
     if (issue) {
@@ -94,15 +106,21 @@ export async function POST(req: Request) {
           ? issue.description.replace(/<[^>]*>/g, '').trim()
           : ''
 
-        await enqueueSyncEvent(issue.id, 'issue_created', {
-          title: issue.title,
-          description: plainDescription || issue.title,
-          payment_details: 'Contact poster for payment details',
-          deadline: issue.due_date || null,
-          project_id: issue.project_id,
-        })
-
-        processSyncQueue().catch(() => {})
+        if (isSyncReady(issue)) {
+          await enqueueSyncEvent(issue.id, 'issue_created', {
+            title: issue.title,
+            description: plainDescription || issue.title,
+            requirements: issue.requirements || undefined,
+            payment_amount: issue.payment_amount,
+            payment_currency: issue.payment_currency,
+            payment_details: issue.payment_details || undefined,
+            deadline: issue.due_date || null,
+            project_id: issue.project_id,
+          })
+          processSyncQueue().catch(() => {})
+        } else {
+          await updateSyncStatus(issue.id, 'pending_fields')
+        }
       }
     }
 

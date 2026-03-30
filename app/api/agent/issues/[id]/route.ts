@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { withAgentAuth } from '@/lib/agent-response'
-import { getIssue, updateIssue, deleteIssue, logTransaction } from '@/lib/db'
-import { enqueueSyncEvent, processSyncQueue } from '@/lib/sync'
+import { getIssue, updateIssue, deleteIssue, logTransaction, updateSyncStatus } from '@/lib/db'
+import { enqueueSyncEvent, processSyncQueue, isSyncReady } from '@/lib/sync'
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return withAgentAuth(req, async () => {
@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const body = await req.json()
-    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, internal_only } = body
+    const { title, description, status, priority, assignee_id, milestone_id, start_date, due_date, internal_only, payment_amount, payment_currency, payment_details, requirements } = body
 
     if (title !== undefined && (typeof title !== 'string' || title.length > 200)) {
       return NextResponse.json({
@@ -70,6 +70,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }, { status: 400 })
     }
 
+    if (payment_amount !== undefined && payment_amount !== null && (typeof payment_amount !== 'number' || payment_amount <= 0)) {
+      return NextResponse.json({
+        ok: false,
+        error: { code: 'VALIDATION_ERROR', message: 'payment_amount must be a positive number or null', suggestion: 'Example: 50.00' }
+      }, { status: 400 })
+    }
+
     const issue = await updateIssue(id, {
       title,
       description,
@@ -80,6 +87,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       start_date,
       due_date,
       internal_only,
+      payment_amount,
+      payment_currency,
+      payment_details,
+      requirements,
     })
 
     if (issue) {
@@ -92,21 +103,61 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         new_data: issue,
       })
 
-      if (issue.taskhive_task_id && !issue.internal_only) {
+      if (!issue.internal_only) {
         const plainDescription = issue.description
           ? issue.description.replace(/<[^>]*>/g, '').trim()
           : ''
 
-        await enqueueSyncEvent(issue.id, 'issue_updated', {
-          taskhive_task_id: issue.taskhive_task_id,
-          updates: {
+        // Case 1: Was pending_fields, now sync-ready
+        if (issue.taskhive_sync_status === 'pending_fields' && isSyncReady(issue as any)) {
+          await enqueueSyncEvent(issue.id, 'issue_created', {
             title: issue.title,
             description: plainDescription || issue.title,
+            requirements: issue.requirements || undefined,
+            payment_amount: issue.payment_amount,
+            payment_currency: issue.payment_currency,
+            payment_details: issue.payment_details || undefined,
             deadline: issue.due_date || null,
+            project_id: issue.project_id,
+          })
+          await updateSyncStatus(issue.id, 'pending')
+          processSyncQueue().catch(() => {})
+        }
+        // Case 2: Already synced
+        else if (issue.taskhive_task_id) {
+          await enqueueSyncEvent(issue.id, 'issue_updated', {
+            taskhive_task_id: issue.taskhive_task_id,
+            updates: {
+              title: issue.title,
+              description: plainDescription || issue.title,
+              requirements: issue.requirements || undefined,
+              payment_amount: issue.payment_amount,
+              payment_currency: issue.payment_currency,
+              payment_details: issue.payment_details || undefined,
+              deadline: issue.due_date || null,
+            }
+          })
+          processSyncQueue().catch(() => {})
+        }
+        // Case 3: internal_only toggled false
+        else if (oldIssue.internal_only && !issue.internal_only) {
+          if (isSyncReady(issue as any)) {
+            await enqueueSyncEvent(issue.id, 'issue_created', {
+              title: issue.title,
+              description: plainDescription || issue.title,
+              requirements: issue.requirements || undefined,
+              payment_amount: issue.payment_amount,
+              payment_currency: issue.payment_currency,
+              payment_details: issue.payment_details || undefined,
+              deadline: issue.due_date || null,
+              project_id: issue.project_id,
+            })
+            await updateSyncStatus(issue.id, 'pending')
+            processSyncQueue().catch(() => {})
+          } else {
+            await updateSyncStatus(issue.id, 'pending_fields')
           }
-        })
-
-        processSyncQueue().catch(() => {})
+        }
       }
     }
 
