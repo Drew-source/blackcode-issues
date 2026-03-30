@@ -198,6 +198,13 @@ export async function POST(request: NextRequest) {
       // Column might already exist
     }
 
+    try {
+      await sql`ALTER TABLE issues ADD COLUMN IF NOT EXISTS claim_only_details TEXT`
+      migrations.push('Added claim_only_details column to issues')
+    } catch (e) {
+      // Column might already exist
+    }
+
     return NextResponse.json({
       success: true,
       migrations,

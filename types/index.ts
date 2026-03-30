@@ -54,6 +54,7 @@ export interface Issue {
   payment_currency?: string
   payment_details?: string
   requirements?: string
+  claim_only_details?: string
   assignee_name?: string
   assignee_avatar?: string
   milestone_name?: string

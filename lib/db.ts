@@ -52,6 +52,7 @@ export interface Issue {
   payment_currency?: string
   payment_details?: string
   requirements?: string
+  claim_only_details?: string
   internal_only?: boolean
   taskhive_task_id?: number
   taskhive_sync_status?: string
