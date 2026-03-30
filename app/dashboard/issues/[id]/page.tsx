@@ -20,6 +20,7 @@ import {
   History,
   ChevronDown,
   ChevronRight,
+  DollarSign,
 } from 'lucide-react'
 import { RichTextEditor, RichTextDisplay } from '@/components/rich-text-editor'
 import { useImageLightbox } from '@/components/image-lightbox'
@@ -59,6 +60,10 @@ interface Issue {
   attachment_count: number
   start_date?: string
   due_date?: string
+  payment_amount?: number
+  payment_currency?: string
+  payment_details?: string
+  requirements?: string
   taskhive_task_id?: number
   taskhive_sync_status?: string
   created_at: string
@@ -799,6 +804,73 @@ export default function IssueDetailPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Bounty Details */}
+            <div className="bg-card rounded-lg border border-border p-4 space-y-3">
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <DollarSign size={12} />
+                Bounty
+              </h3>
+
+              {/* Sync status indicator */}
+              {issue.taskhive_sync_status === 'pending_fields' && (
+                <div className="flex items-center gap-2 px-2 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="text-xs text-amber-400">Awaiting bounty info to sync</span>
+                </div>
+              )}
+
+              {/* Payment Amount */}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Amount</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={issue.payment_amount ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? parseFloat(e.target.value) : null
+                      updateIssue.mutate({ payment_amount: val } as any)
+                    }}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <input
+                    type="text"
+                    value={issue.payment_currency ?? 'USD'}
+                    onChange={(e) => updateIssue.mutate({ payment_currency: e.target.value.toUpperCase() } as any)}
+                    placeholder="USD"
+                    maxLength={10}
+                    className="w-20 px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Details */}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Payment Details</label>
+                <textarea
+                  value={issue.payment_details ?? ''}
+                  onChange={(e) => updateIssue.mutate({ payment_details: e.target.value || null } as any)}
+                  placeholder="Payment method..."
+                  rows={2}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              {/* Requirements */}
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Requirements</label>
+                <textarea
+                  value={issue.requirements ?? ''}
+                  onChange={(e) => updateIssue.mutate({ requirements: e.target.value || null } as any)}
+                  placeholder="Acceptance criteria..."
+                  rows={3}
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
             </div>
 
             {/* Metadata */}
